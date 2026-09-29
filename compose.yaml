@@ -1,0 +1,50 @@
+# Sabor Costeño en un servidor: la app + Caddy (HTTPS automático).
+#   cp .env.example .env    (y pon tu dominio)
+#   docker compose up -d --build
+# Guía completa: DESPLIEGUE.md
+
+services:
+  app:
+    build: .
+    image: sabor-costeno
+    restart: unless-stopped
+    init: true
+    environment:
+      PUBLIC_URL: https://${DOMINIO:?Falta DOMINIO en el archivo .env}
+      # solo se cree la IP que reporta Caddy (red interna de Docker)
+      TRUST_PROXY: uniquelocal
+    volumes:
+      # base de datos, fotos y respaldos: quedan en la carpeta ./data del servidor
+      - ./data:/data
+    # sin "ports": la app no queda expuesta a internet, solo Caddy la alcanza
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMINIO: ${DOMINIO}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  # certificados HTTPS: si se borran, Caddy los vuelve a pedir
+  caddy_data:
+  caddy_config:

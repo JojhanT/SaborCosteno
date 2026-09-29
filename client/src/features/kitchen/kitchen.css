@@ -1,0 +1,694 @@
+/* ============================================================ COCINA (TV) */
+.kitchen {
+  --k: 1;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr);
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(243, 129, 32, 0.1), transparent 70%),
+    #0e0501;
+  overflow: hidden;
+  user-select: none;
+}
+
+.k-top {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  height: calc(86px * var(--k));
+  padding: 0 28px 0 18px;
+  padding-right: 80px;
+  background: linear-gradient(180deg, #25120a, #170a04);
+  box-shadow: 0 1px 0 var(--line-2);
+}
+.k-logo {
+  height: calc(66px * var(--k));
+  width: auto;
+}
+.k-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.k-title h1 {
+  margin: 0;
+  font-size: calc(38px * var(--k));
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+.k-stats {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+}
+.k-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  border-radius: 16px;
+  background: rgba(255, 214, 170, 0.05);
+  box-shadow: 0 0 0 1px var(--line) inset;
+}
+.k-stat b {
+  font-size: calc(36px * var(--k));
+  line-height: 1;
+  color: var(--orange-hi);
+}
+.k-stat span {
+  font-size: calc(13px * var(--k));
+  line-height: 1.15;
+  color: var(--muted);
+  font-weight: 600;
+}
+.k-stat.late {
+  background: rgba(240, 85, 63, 0.15);
+  box-shadow: 0 0 0 1.5px rgba(240, 85, 63, 0.5) inset;
+  animation: blink 1.4s ease-in-out infinite;
+}
+.k-stat.late b,
+.k-stat.late svg {
+  color: var(--red);
+}
+.k-stat.late svg {
+  width: 26px;
+  height: 26px;
+}
+.k-clock {
+  font-size: calc(36px * var(--k));
+  color: var(--cream);
+  line-height: 1;
+  min-width: 150px;
+  text-align: right;
+}
+
+.k-main {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+.k-grid {
+  height: 100%;
+  padding: 16px;
+  column-count: var(--cols);
+  column-gap: 16px;
+  column-fill: auto;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------ tarjeta */
+.kcard {
+  --heat: transparent;
+  position: relative;
+  break-inside: avoid;
+  margin: 0 0 16px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #2a150a, #1c0d05);
+  box-shadow:
+    0 0 0 1px var(--line-2) inset,
+    0 18px 40px -20px rgba(0, 0, 0, 0.9);
+  overflow: hidden;
+  animation: kcard-in 0.6s var(--ease-spring) both;
+}
+@keyframes kcard-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.94);
+  }
+}
+.kcard.tall {
+  break-inside: auto;
+  break-before: column;
+  overflow: visible;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.kcard.tall .kcard-head {
+  border-radius: 22px 22px 0 0;
+}
+/* en una tarjeta partida, cada producto va entero si cabe (los muy altos sí se parten) */
+.kcard.tall .kitem:not(.big),
+.kcard.tall .kmod,
+.kcard.tall .kcard-foot {
+  break-inside: avoid;
+}
+.kcard.heat-warn {
+  box-shadow:
+    0 0 0 2.5px var(--gold) inset,
+    0 18px 40px -20px rgba(0, 0, 0, 0.9);
+}
+.kcard.heat-late {
+  box-shadow:
+    0 0 0 3px var(--red) inset,
+    0 0 40px -6px rgba(240, 85, 63, 0.55);
+}
+.kcard::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+}
+.kcard.heat-late::after {
+  box-shadow: 0 0 0 3px var(--red) inset;
+  background: rgba(240, 85, 63, 0.07);
+  animation: glow-blink 1.8s ease-in-out infinite;
+}
+.kcard.fresh::after {
+  box-shadow: 0 0 0 4px var(--type) inset;
+  background: color-mix(in srgb, var(--type) 12%, transparent);
+  animation: glow-blink 1.3s ease-in-out 4;
+}
+@keyframes glow-blink {
+  50% {
+    opacity: 1;
+  }
+}
+
+.kcard-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(10px * var(--k)) 14px calc(10px * var(--k)) 16px;
+  background:
+    var(--vueltiao-soft),
+    linear-gradient(135deg, var(--type), color-mix(in srgb, var(--type) 70%, #000));
+  color: var(--type-ink);
+}
+.kcard-turn {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+  padding-right: 12px;
+  border-right: 2px solid color-mix(in srgb, var(--type-ink) 25%, transparent);
+}
+.kcard-turn span {
+  font-size: calc(11px * var(--k));
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.kcard-turn b {
+  font-size: calc(52px * var(--k));
+  line-height: 0.9;
+}
+.kcard-place {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kcard-place-art {
+  width: calc(46px * var(--k));
+  height: calc(46px * var(--k));
+  flex: none;
+  padding: 3px;
+  border-radius: 14px;
+  background: rgba(255, 248, 238, 0.85);
+}
+.kcard-place-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+/* "PARA LLEVAR" baja a dos líneas en vez de cortarse cuando el cronómetro es largo */
+.kcard-place-text b {
+  font-size: calc(26px * var(--k));
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: normal;
+}
+.kcard-place-text small {
+  font-size: calc(14px * var(--k));
+  font-weight: 700;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kcard-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: calc(40px * var(--k));
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: calc(21px * var(--k));
+  font-weight: 800;
+  background: rgba(20, 8, 2, 0.82);
+  color: #8ff0b3;
+  flex: none;
+}
+.kcard-timer svg {
+  width: calc(19px * var(--k));
+  height: calc(19px * var(--k));
+}
+.heat-warn .kcard-timer {
+  color: var(--gold);
+}
+.heat-late .kcard-timer {
+  background: var(--red);
+  color: #fff;
+  animation: blink 1s ease-in-out infinite;
+}
+
+.kcard-flags {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px 0;
+}
+.kflag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: calc(28px * var(--k));
+  padding: 0 12px;
+  border-radius: 99px;
+  font-size: calc(14px * var(--k));
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.kflag svg {
+  width: 16px;
+  height: 16px;
+}
+.kflag.new {
+  background: var(--cream);
+  color: var(--brown);
+  animation: blink 0.9s ease-in-out infinite;
+}
+.kflag.more {
+  background: rgba(255, 214, 170, 0.1);
+  color: var(--ink-2);
+}
+.kflag.edit {
+  background: rgba(255, 197, 61, 0.18);
+  color: var(--gold);
+  box-shadow: 0 0 0 1.5px rgba(255, 197, 61, 0.6) inset;
+}
+
+.kcard-items {
+  list-style: none;
+  margin: 0;
+  padding: calc(8px * var(--k)) 10px calc(4px * var(--k));
+}
+.kitem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: calc(9px * var(--k)) 6px;
+}
+.kitem + .kitem {
+  border-top: 1px dashed var(--line-2);
+}
+.kitem.added {
+  margin: 2px -4px;
+  padding-left: 10px;
+  padding-right: 10px;
+  border-radius: 14px;
+  background: rgba(255, 197, 61, 0.1);
+  box-shadow: 0 0 0 1.5px rgba(255, 197, 61, 0.5) inset;
+}
+.kitem.added + .kitem {
+  border-top: 0;
+}
+.kitem-qty {
+  min-width: calc(44px * var(--k));
+  height: calc(44px * var(--k));
+  padding: 0 6px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: calc(28px * var(--k));
+  line-height: 1;
+  background: var(--orange);
+  color: var(--brown);
+  flex: none;
+  box-shadow: 0 6px 16px -6px rgba(243, 129, 32, 0.8);
+}
+.kitem-thumb {
+  width: calc(44px * var(--k));
+  height: calc(44px * var(--k));
+  border-radius: 12px;
+  flex: none;
+  background: radial-gradient(circle at 50% 40%, #4a250e, #2a150a);
+}
+.kitem-thumb > .art {
+  width: 86%;
+  height: 86%;
+}
+.kitem-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 2px;
+}
+.kitem-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: calc(24px * var(--k));
+  line-height: 1.1;
+  color: var(--cream);
+}
+.kitem-opt {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 10px;
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  font-size: calc(15px * var(--k));
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: 3px;
+  background: var(--cream);
+  color: var(--brown);
+}
+.kitem-added {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--k));
+  font-weight: 800;
+  vertical-align: 4px;
+  background: var(--gold);
+  color: var(--brown);
+}
+
+.kmods {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kmod {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: calc(5px * var(--k)) 8px calc(5px * var(--k)) 10px;
+  border-radius: 10px;
+  font-size: calc(17px * var(--k));
+  font-weight: 700;
+  line-height: 1.2;
+}
+.kmod > svg {
+  width: calc(18px * var(--k));
+  height: calc(18px * var(--k));
+  flex: none;
+  margin-top: calc(3px * var(--k));
+}
+.kmod-tag {
+  font-size: calc(12.5px * var(--k));
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  margin-top: calc(1px * var(--k));
+  border-radius: 6px;
+  flex: none;
+}
+/*
+ * lista de salsas / adiciones: pastillas que bajan de línea cuando no caben.
+ * Van en flujo de texto normal (no flex-wrap): es lo más confiable para que la
+ * caja crezca con su contenido en cualquier navegador, también dentro de columnas.
+ */
+.kmod-list {
+  flex: 1 1 0;
+  min-width: 0;
+  display: block;
+  line-height: 0;
+  margin-bottom: calc(-4px * var(--k));
+}
+.kmod-item {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: top;
+  gap: calc(6px * var(--k));
+  max-width: 100%;
+  margin: 0 calc(5px * var(--k)) calc(4px * var(--k)) 0;
+  padding: calc(1px * var(--k)) calc(8px * var(--k));
+  border-radius: 7px;
+  line-height: 1.2;
+  background: rgba(0, 0, 0, 0.22);
+  overflow-wrap: anywhere;
+}
+.kmod-item .dot {
+  width: calc(12px * var(--k));
+  height: calc(12px * var(--k));
+}
+.kmod.sin {
+  background: rgba(240, 85, 63, 0.16);
+  color: #ffa696;
+}
+.kmod.sin .kmod-tag {
+  background: var(--red);
+  color: #fff;
+}
+.kmod.aparte {
+  background: rgba(255, 197, 61, 0.14);
+  color: #ffd87a;
+}
+.kmod.aparte .kmod-tag {
+  background: var(--gold);
+  color: var(--brown);
+}
+.kmod.salsa {
+  background: rgba(255, 214, 170, 0.07);
+  color: var(--ink-2);
+}
+.kmod.salsa > svg {
+  color: var(--orange-hi);
+}
+.kmod.extra {
+  background: rgba(79, 198, 124, 0.14);
+  color: #8ff0b3;
+}
+.kmod.extra .kmod-tag {
+  background: var(--green);
+  color: #062812;
+}
+.kmod.note {
+  background: rgba(255, 241, 220, 0.9);
+  color: var(--brown);
+  font-style: italic;
+}
+
+.kcard-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 4px 14px 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: calc(18px * var(--k));
+  font-weight: 700;
+  background: var(--cream);
+  color: var(--brown);
+}
+.kcard-note svg {
+  width: calc(20px * var(--k));
+  height: calc(20px * var(--k));
+  flex: none;
+  margin-top: 2px;
+  color: var(--orange-lo);
+}
+.kcard-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px 10px;
+  font-size: calc(13.5px * var(--k));
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.2);
+}
+.kcard-paid {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--green);
+}
+.kcard-paid svg {
+  width: 15px;
+  height: 15px;
+}
+
+.k-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+.k-empty-hat {
+  width: 260px;
+  animation: hat-bob 3.4s ease-in-out infinite;
+  filter: drop-shadow(0 30px 30px rgba(0, 0, 0, 0.6));
+  opacity: 0.95;
+}
+.k-empty h2 {
+  margin: 18px 0 0;
+  font-size: 54px;
+  color: var(--cream);
+  line-height: 1;
+}
+.k-empty p {
+  margin: 0;
+  font-size: 20px;
+}
+
+/*
+ * Siempre del mismo alto, haya o no turnos en espera: si creciera al aparecer
+ * uno, las columnas se achicarían y todas las tarjetas se volverían a acomodar
+ * (y una tarjeta podría dejar de caber justo por eso).
+ */
+.k-foot {
+  height: calc(62px * var(--k));
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+.k-foot.has-queue {
+  justify-content: center;
+  padding: 10px 18px;
+  background: linear-gradient(90deg, #3a1a09, #25120a);
+  box-shadow: 0 -1px 0 var(--line-2);
+}
+.k-waiting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+}
+.k-waiting-label {
+  flex: none;
+  padding: 6px 14px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: calc(18px * var(--k));
+  background: var(--orange);
+  color: var(--brown);
+  animation: blink 1.6s ease-in-out infinite;
+}
+.k-waiting-turn small {
+  font-family: var(--font-ui);
+  font-size: calc(13px * var(--k));
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.8;
+}
+.k-waiting-turn.partial {
+  box-shadow: 0 0 0 1.5px var(--orange) inset;
+}
+.k-waiting-turn {
+  flex: none;
+  font-size: calc(26px * var(--k));
+  line-height: 1;
+  padding: 6px 14px;
+  border-radius: 12px;
+  background: rgba(255, 214, 170, 0.08);
+  color: var(--cream);
+}
+
+/* textos largos (notas, nombres) bajan de línea en vez de salirse de la tarjeta */
+.kitem-name,
+.kmod > span:not(.kmod-tag):not(.kmod-list),
+.kcard-note span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------- botón «Listo» */
+.kcard-foot {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.kcard-foot > span:first-child {
+  margin-right: auto;
+}
+.kcard-done {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: calc(46px * var(--k));
+  padding: 0 calc(20px * var(--k));
+  border-radius: 14px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: calc(20px * var(--k));
+  letter-spacing: 0.02em;
+  background: linear-gradient(180deg, #5fd68b, #3fb46b);
+  color: #062812;
+  box-shadow:
+    0 0 0 1px rgba(140, 240, 170, 0.5) inset,
+    0 10px 24px -10px rgba(79, 198, 124, 0.8);
+  transition:
+    transform 0.15s var(--ease-out),
+    filter 0.2s;
+}
+.kcard-done:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.kcard-done:active:not(:disabled) {
+  transform: scale(0.95);
+}
+.kcard-done:disabled {
+  opacity: 0.6;
+}
+.kcard-done svg {
+  width: calc(22px * var(--k));
+  height: calc(22px * var(--k));
+}
+.kcard-done .spinner {
+  width: 18px;
+  height: 18px;
+  border-color: rgba(6, 40, 18, 0.25);
+  border-top-color: #062812;
+}
+
+.kitchen.narrow .kcard-place-art {
+  display: none;
+}
+.kitchen.narrow .kcard-timer {
+  padding: 0 9px;
+  font-size: calc(19px * var(--k));
+}
+
+/* copia invisible de las tarjetas (mide su altura natural, sin columnas) */
+.k-measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+.k-measure .kcard {
+  animation: none;
+  margin: 0;
+}
+.k-measure .kcard + .kcard {
+  margin-top: 16px;
+}

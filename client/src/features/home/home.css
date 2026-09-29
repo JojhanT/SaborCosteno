@@ -1,0 +1,300 @@
+.splash {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 22px;
+  background: radial-gradient(ellipse at 50% 45%, #2c1409, var(--bg) 60%);
+}
+.splash-hat {
+  width: 180px;
+  animation: hat-bob 1.6s var(--ease-out) infinite;
+  filter: drop-shadow(0 16px 20px rgba(0, 0, 0, 0.5));
+}
+.splash p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 500;
+}
+.splash-bar {
+  width: 160px;
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(255, 214, 170, 0.1);
+  overflow: hidden;
+}
+.splash-bar span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--orange);
+  animation: splash-slide 1.2s ease-in-out infinite;
+}
+@keyframes splash-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+@keyframes hat-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(3deg);
+  }
+}
+
+/* ----------------------------------------------------------------- home */
+.home {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background:
+    var(--vueltiao-soft),
+    radial-gradient(ellipse 80% 60% at 20% 30%, #3a1a0a 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90% 90%, #2a1206 0%, transparent 60%),
+    var(--bg);
+}
+.home-glow {
+  position: absolute;
+  width: 900px;
+  height: 900px;
+  left: -200px;
+  top: -250px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(243, 129, 32, 0.2), transparent 65%);
+  pointer-events: none;
+  animation: glow-drift 14s ease-in-out infinite alternate;
+}
+@keyframes glow-drift {
+  to {
+    transform: translate(120px, 60px) scale(1.1);
+  }
+}
+.home-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 20px 32px 0;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.home-top {
+  gap: 12px;
+}
+.home-top .clock {
+  font-size: 17px;
+}
+.home-main {
+  position: relative;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) 1.2fr;
+  align-items: center;
+  gap: 56px;
+  padding: 24px clamp(24px, 5vw, 80px);
+  max-width: 1500px;
+  width: 100%;
+  margin: 0 auto;
+}
+.home-logo {
+  width: min(520px, 100%);
+  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.5));
+}
+.home-tag {
+  margin: 18px 0 0;
+  font-size: 18px;
+  color: var(--muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.home-stats {
+  display: flex;
+  gap: 12px;
+  margin-top: 28px;
+}
+.home-stats > div {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 18px;
+  border-radius: 18px;
+  background: rgba(255, 214, 170, 0.05);
+  box-shadow: 0 0 0 1px var(--line) inset;
+  min-width: 110px;
+}
+.home-stats b {
+  font-size: 34px;
+  line-height: 1;
+  color: var(--orange-hi);
+}
+.home-stats span {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.home-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+.home-tile {
+  --tone: var(--orange);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 26px 26px 32px;
+  min-height: 250px;
+  text-align: left;
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--tone) 28%, transparent), transparent 55%),
+    linear-gradient(180deg, var(--s2), var(--s1));
+  box-shadow:
+    0 0 0 1px var(--line-2) inset,
+    var(--shadow-2);
+  transition: box-shadow 0.3s;
+}
+.home-tile:hover {
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--tone) 70%, transparent) inset,
+    0 30px 60px -20px color-mix(in srgb, var(--tone) 45%, transparent);
+}
+.home-tile.tone-gold {
+  --tone: var(--gold);
+}
+.home-tile.tone-sea {
+  --tone: var(--sea);
+}
+.home-tile.tone-terra {
+  --tone: var(--terra);
+}
+.home-tile-art {
+  width: 108px;
+  height: 108px;
+  padding: 10px;
+  border-radius: 28px;
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--tone) 35%, #3a1d0c), #2a1508);
+  box-shadow:
+    0 0 0 1px rgba(255, 220, 180, 0.12) inset,
+    0 14px 30px -12px rgba(0, 0, 0, 0.7);
+  transition: transform 0.4s var(--ease-spring);
+}
+.home-tile:hover .home-tile-art {
+  transform: rotate(-6deg) scale(1.06);
+}
+.home-tile h2 {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1;
+}
+.home-tile p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+  max-width: 250px;
+}
+.home-tile-key {
+  position: absolute;
+  top: 22px;
+  right: 60px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  box-shadow: 0 0 0 1px var(--line-2) inset;
+}
+.home-tile-arrow {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  width: 28px;
+  height: 28px;
+  color: var(--tone);
+  transition: transform 0.3s var(--ease-out);
+}
+.home-tile:hover .home-tile-arrow {
+  transform: translate(3px, -3px);
+}
+.home-tile-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.85;
+}
+
+.home-foot {
+  position: relative;
+  padding: 0 32px 18px;
+}
+.home-lan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13.5px;
+  justify-content: center;
+}
+.home-lan > svg {
+  width: 18px;
+  height: 18px;
+  color: var(--orange);
+}
+.lan-chip {
+  cursor: pointer;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 12px;
+}
+.lan-chip:hover {
+  background: rgba(243, 129, 32, 0.18);
+  color: var(--orange-hi);
+}
+.home-band {
+  position: relative;
+}
+
+@media (max-width: 1000px) {
+  .home-main {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .home-hero {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .home-logo {
+    width: min(360px, 80%);
+  }
+}
+@media (max-width: 560px) {
+  .home-tiles {
+    grid-template-columns: 1fr;
+  }
+  .home-tile {
+    min-height: 0;
+    flex-direction: row;
+    align-items: center;
+  }
+  .home-tile-art {
+    width: 80px;
+    height: 80px;
+  }
+}

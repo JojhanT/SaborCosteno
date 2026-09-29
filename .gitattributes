@@ -1,0 +1,5 @@
+# los scripts de Linux siempre con finales de línea LF (si no, fallan en el servidor)
+*.sh text eol=lf
+Caddyfile text eol=lf
+# los .bat de Windows con CRLF
+*.bat text eol=crlf

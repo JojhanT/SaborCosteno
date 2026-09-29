@@ -1,0 +1,11 @@
+.git
+node_modules
+client/dist
+data
+documentos
+.env
+*.bat
+*.log
+*.stackdump
+compose.yaml
+DESPLIEGUE.md

@@ -1,0 +1,15 @@
+# Caddy recibe el tráfico de internet, saca y renueva solo el certificado HTTPS
+# (Let's Encrypt) para el dominio de .env y se lo pasa a la app.
+
+{$DOMINIO} {
+	# se comprime todo menos la conexión en vivo (/api/stream), que debe llegar al instante
+	@comprimible not path /api/stream
+	encode @comprimible zstd gzip
+
+	reverse_proxy app:3000
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+}

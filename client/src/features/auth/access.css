@@ -1,0 +1,290 @@
+/* ============================================= ingreso y configuración */
+/* usa el mismo lienzo del inicio (home.css): logo a la izquierda, contenido a la derecha */
+.access-home .home-main {
+  padding-top: 40px;
+  padding-bottom: 40px;
+}
+.access-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 26px 0 0;
+  font-size: clamp(30px, 3.4vw, 46px);
+  line-height: 1.05;
+}
+.access-title svg {
+  width: 36px;
+  height: 36px;
+  color: var(--orange);
+  flex: none;
+}
+.access-home .home-tag {
+  margin-top: 10px;
+}
+.access-panel {
+  --tone: var(--orange);
+  position: relative;
+  justify-self: center;
+  width: min(480px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 30px 30px 40px;
+  border-radius: var(--r-xl);
+  text-align: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--tone) 26%, transparent), transparent 55%),
+    linear-gradient(180deg, var(--s2), var(--s1));
+  box-shadow:
+    0 0 0 1px var(--line-2) inset,
+    var(--shadow-2);
+}
+.access-panel.tone-gold {
+  --tone: var(--gold);
+}
+.access-panel.tone-sea {
+  --tone: var(--sea);
+}
+.access-panel.tone-terra {
+  --tone: var(--terra);
+}
+.access-panel p {
+  margin: 0;
+}
+.access-panel code {
+  font-family: ui-monospace, Consolas, monospace;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(243, 129, 32, 0.14);
+  color: var(--orange-hi);
+}
+.access-panel-art {
+  --tone: inherit;
+}
+.access-panel.setup {
+  width: min(560px, 100%);
+  text-align: left;
+  align-items: stretch;
+}
+.access-hat {
+  width: 150px;
+}
+.access-back {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 2;
+}
+.access-hint {
+  font-size: 14px;
+}
+.access-device {
+  width: 100%;
+  text-align: left;
+}
+.access-device > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.access-error {
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(240, 85, 63, 0.14);
+  color: #ff8b78;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.setup-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 214, 170, 0.04);
+  box-shadow: 0 0 0 1px var(--line) inset;
+}
+.setup-block.main {
+  background: rgba(243, 129, 32, 0.08);
+  box-shadow: 0 0 0 1.5px rgba(243, 129, 32, 0.4) inset;
+}
+.setup-block h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+}
+.setup-block h3 small {
+  font-weight: 500;
+  color: var(--muted);
+}
+.setup-block h3 svg {
+  width: 26px;
+  height: 26px;
+  color: var(--orange);
+}
+.setup-block small {
+  font-size: 12.5px;
+}
+.setup-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .setup-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ------------------------------------------------------------- inicio de sesión */
+.login-panel {
+  width: min(440px, 100%);
+  align-items: stretch;
+  text-align: left;
+  gap: 14px;
+}
+.login-hat {
+  width: 96px;
+  align-self: center;
+  margin-bottom: -4px;
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.5));
+}
+.login-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.login-panel .field > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.login-help {
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+}
+.access-panel .pass-checks {
+  margin-top: 2px;
+}
+.setup-code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 22px;
+  letter-spacing: 0.18em;
+  text-align: center;
+}
+/* ---------------------------------------------------------- menú del usuario */
+.umenu {
+  position: relative;
+}
+.umenu-btn {
+  --tone: var(--orange);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 44px;
+  padding: 0 10px 0 5px;
+  border-radius: 14px;
+  text-align: left;
+  transition: background 0.2s;
+}
+.umenu-btn:hover,
+.umenu-btn[aria-expanded='true'] {
+  background: rgba(255, 214, 170, 0.07);
+}
+.umenu-btn.tone-gold {
+  --tone: var(--gold);
+}
+.umenu-btn.tone-sea {
+  --tone: var(--sea);
+}
+.umenu-btn.tone-terra {
+  --tone: var(--terra);
+}
+.umenu-who {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  min-width: 0;
+}
+.umenu-who b {
+  font-size: 13.5px;
+  color: var(--ink);
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.umenu-who small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.umenu-caret {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+.umenu-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 90;
+  width: 250px;
+  padding: 6px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--s3), var(--s2));
+  box-shadow:
+    0 0 0 1px var(--line-2),
+    0 24px 60px -16px rgba(0, 0, 0, 0.9);
+  transform-origin: top right;
+}
+.umenu-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px 10px;
+  margin-bottom: 4px;
+  box-shadow: 0 1px 0 var(--line);
+}
+.umenu-head b {
+  font-size: 15px;
+}
+.umenu-head small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+}
+.umenu-pop > button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink-2);
+  text-align: left;
+}
+.umenu-pop > button:hover {
+  background: rgba(255, 214, 170, 0.07);
+}
+.umenu-pop > button svg {
+  width: 17px;
+  height: 17px;
+  color: var(--muted);
+}
+.umenu-pop > button.danger {
+  color: #ff8b78;
+}
+.umenu-pop > button.danger svg {
+  color: #ff8b78;
+}
