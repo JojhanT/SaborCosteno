@@ -1,11 +1,12 @@
 # Desplegar en un VPS (Contabo)
 
-El sistema corre en Docker con dos contenedores:
+El sistema corre en Docker con tres contenedores:
 
-- **app**: el servidor de Sabor Costeño (Node 24 + SQLite). No queda expuesto a internet.
+- **app**: el servidor de Sabor Costeño (Node 24 + MySQL vía `mysql2`). No queda expuesto a internet.
+- **mysql**: la base de datos. Tampoco queda expuesta a internet, solo la alcanza `app`.
 - **caddy**: recibe el tráfico por los puertos 80/443 y saca y renueva solo el certificado **HTTPS** (Let's Encrypt).
 
-Los datos (base, fotos y respaldos) quedan en la carpeta `data/` del servidor, fuera de los contenedores: reconstruir o actualizar no los toca.
+La base de datos vive en el volumen `mysql_data` (gestionado por Docker). Las fotos y los respaldos quedan en la carpeta `data/` del servidor, fuera de los contenedores: reconstruir o actualizar no los toca.
 
 > **Ojo:** en un VPS la caja, la cocina y los repartidores se conectan **por internet**. Si se cae el internet del local, las pantallas del local dejan de recibir pedidos hasta que vuelva (se reconectan solas).
 
@@ -118,13 +119,13 @@ msedge --kiosk https://TU-DOMINIO/cocina --autoplay-policy=no-user-gesture-requi
 | Copia de seguridad ahora | `docker compose exec -u node app npm run -s respaldo` |
 | Olvidé la clave del administrador | `docker compose exec -u node app npm run -s reset-claves` |
 
-**Actualizar:** antes de cambiar la base, el sistema guarda solo una copia `respaldo-antes-de-actualizar-…db`. Las pantallas abiertas detectan la versión nueva y se recargan solas (la caja ofrece un botón para no interrumpir un cobro). Si subiste el proyecto con `scp`, vuelve a copiar `client`, `server` y los demás archivos y ejecuta `docker compose up -d --build`.
+**Actualizar:** las pantallas abiertas detectan la versión nueva y se recargan solas (la caja ofrece un botón para no interrumpir un cobro). Si subiste el proyecto con `scp`, vuelve a copiar `client`, `server` y los demás archivos y ejecuta `docker compose up -d --build`.
 
 **Recuperar el administrador:** el comando `reset-claves` desconecta todos los equipos y muestra un código. Entra a `https://TU-DOMINIO/recuperar` (o, en el login, toca *Soy el administrador: recuperar con el código*). Escribe un usuario nuevo, o uno existente para ponerle contraseña nueva. No se borra nada más.
 
 ## Copias de seguridad
 
-`npm run respaldo` guarda una copia completa de la base en `data/respaldos/sabor-AAAA-MM-DD-HHMM.db` **sin apagar el sistema**, y deja las últimas 30. Para que se haga sola todos los días a las 4 a. m., ejecuta `crontab -e` en el servidor y agrega:
+`npm run respaldo` guarda un volcado completo de MySQL (`mysqldump`) en `data/respaldos/sabor-AAAA-MM-DD-HHMM.sql` **sin apagar el sistema**, y deja los últimos 30. Para que se haga solo todos los días a las 4 a. m., ejecuta `crontab -e` en el servidor y agrega:
 
 ```
 0 4 * * * cd /opt/sabor && docker compose exec -T -u node app npm run -s respaldo >> /var/log/sabor-respaldo.log 2>&1
@@ -136,18 +137,14 @@ Las fotos están en `data/uploads` (no cambian una vez subidas). Para bajar todo
 scp -r root@IP-DEL-VPS:/opt/sabor/data .\respaldo-servidor
 ```
 
-De esa copia, las bases buenas para restaurar son las de `respaldos/` (el `sabor.db` suelto se está usando mientras lo copias).
-
 Guarda copias **fuera** del VPS: si el servidor se pierde, las copias que están dentro se pierden con él.
 
 **Volver a una copia:**
 
 ```bash
 cd /opt/sabor
-docker compose stop app
-cp data/respaldos/sabor-2026-09-28-0400.db data/sabor.db
-rm -f data/sabor.db-wal data/sabor.db-shm
-docker compose start app
+docker compose exec -T mysql mysql -u root -p"$(grep MYSQL_ROOT_PASSWORD .env | cut -d= -f2)" sabor < data/respaldos/sabor-2026-09-28-0400.sql
+docker compose restart app
 ```
 
 ## Configuración (variables del contenedor `app`)
@@ -158,10 +155,12 @@ Ya vienen puestas en `compose.yaml`. Solo cámbialas si sabes lo que haces.
 |---|---|---|
 | `PUBLIC_URL` | `https://${DOMINIO}` | Dirección que muestra el inicio para abrir las pantallas |
 | `TRUST_PROXY` | `uniquelocal` | Cree la IP real del cliente que reporta Caddy (freno a intentos, equipos conectados, cookie segura) |
-| `SABOR_DATA` | `/data` | Carpeta de la base, fotos y respaldos (montada en `./data`) |
+| `SABOR_DATA` | `/data` | Carpeta de fotos y respaldos (montada en `./data`) |
 | `TZ` | `America/Bogota` | Hora del registro y de los nombres de los respaldos |
 | `PORT` | `3000` | Puerto interno de la app |
 | `RESPALDOS_MAX` | `30` | Cuántas copias de `npm run respaldo` se guardan |
+| `DB_HOST` / `DB_PORT` | `mysql` / `3306` | Dirección del contenedor de MySQL |
+| `DB_NAME` / `DB_USER` / `DB_PASSWORD` | desde `.env` | Credenciales de la base (variables `MYSQL_*` del `.env`) |
 
 ## Si algo falla
 

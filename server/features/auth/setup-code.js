@@ -18,15 +18,15 @@ const normalize = (code) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/
 const hash = (code) => crypto.createHash('sha256').update(normalize(code)).digest('hex');
 
 /** Crea un código nuevo (el anterior deja de servir) y lo devuelve para mostrarlo. */
-export function issueSetupCode() {
+export async function issueSetupCode() {
   let code = '';
   for (let i = 0; i < LENGTH; i++) code += ALPHABET[crypto.randomInt(ALPHABET.length)];
-  q.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', KEY, JSON.stringify(hash(code)));
+  await q.run('INSERT INTO settings (`key`, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)', KEY, JSON.stringify(hash(code)));
   return `${code.slice(0, 4)}-${code.slice(4)}`;
 }
 
-export function checkSetupCode(code) {
-  const row = q.get('SELECT value FROM settings WHERE key = ?', KEY);
+export async function checkSetupCode(code) {
+  const row = await q.get('SELECT value FROM settings WHERE `key` = ?', KEY);
   if (!row || normalize(code).length !== LENGTH) return false;
   let expected;
   try {
@@ -38,4 +38,4 @@ export function checkSetupCode(code) {
   return expected.length === given.length && crypto.timingSafeEqual(expected, given);
 }
 
-export const clearSetupCode = () => q.run('DELETE FROM settings WHERE key = ?', KEY);
+export const clearSetupCode = () => q.run('DELETE FROM settings WHERE `key` = ?', KEY);

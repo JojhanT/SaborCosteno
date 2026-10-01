@@ -1,7 +1,8 @@
-import { DatabaseSync } from 'node:sqlite';
+import mysql from 'mysql2/promise';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const DATA_DIR = process.env.SABOR_DATA ? path.resolve(process.env.SABOR_DATA) : path.join(ROOT, 'data');
@@ -9,294 +10,235 @@ export const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-export const db = new DatabaseSync(path.join(DATA_DIR, 'sabor.db'));
-db.exec(`
-  PRAGMA journal_mode = WAL;
-  PRAGMA foreign_keys = ON;
-  PRAGMA busy_timeout = 4000;
-  PRAGMA synchronous = NORMAL;
-`);
-
-const ORDER_COLUMNS_V1 = `id, turn, business_day, type, table_number, customer_name, phone, address, address_ref, delivery_fee, note,
-  status, subtotal, total, paid, payment_method, amount_received, edit_count, cancel_reason,
-  created_at, updated_at, ready_at, delivered_at, paid_at, cancelled_at`;
+export const pool = mysql.createPool({
+  host: process.env.DB_HOST || 'localhost',
+  port: Number(process.env.DB_PORT) || 3306,
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'sabor',
+  waitForConnections: true,
+  connectionLimit: 10,
+  // las migraciones corren varias sentencias separadas por ";" en una sola llamada
+  multipleStatements: true,
+});
 
 /**
- * Migraciones incrementales controladas con PRAGMA user_version.
+ * Migraciones incrementales controladas con la tabla schema_migrations.
  * Para agregar cambios futuros (contabilidad, inventario...) basta con sumar una entrada.
  */
 const MIGRATIONS = [
   `
   CREATE TABLE settings (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-  );
+    \`key\` VARCHAR(100) PRIMARY KEY,
+    value   TEXT NOT NULL
+  ) ENGINE=InnoDB;
 
   CREATE TABLE categories (
-    id       INTEGER PRIMARY KEY,
-    name     TEXT NOT NULL,
-    icon     TEXT NOT NULL DEFAULT 'salchipapa',
-    image    TEXT,
-    image_fit TEXT NOT NULL DEFAULT 'cover',
-    sort     INTEGER NOT NULL DEFAULT 0,
-    active   INTEGER NOT NULL DEFAULT 1,
-    archived INTEGER NOT NULL DEFAULT 0
-  );
+    id        INT PRIMARY KEY AUTO_INCREMENT,
+    name      VARCHAR(40) NOT NULL,
+    icon      VARCHAR(40) NOT NULL DEFAULT 'salchipapa',
+    image     VARCHAR(255),
+    image_fit VARCHAR(10) NOT NULL DEFAULT 'cover',
+    sort      INT NOT NULL DEFAULT 0,
+    active    TINYINT(1) NOT NULL DEFAULT 1,
+    archived  TINYINT(1) NOT NULL DEFAULT 0
+  ) ENGINE=InnoDB;
 
   CREATE TABLE products (
-    id            INTEGER PRIMARY KEY,
-    category_id   INTEGER REFERENCES categories(id),
-    name          TEXT NOT NULL,
-    description   TEXT NOT NULL DEFAULT '',
-    price         INTEGER NOT NULL DEFAULT 0,
-    cost          INTEGER,
-    icon          TEXT NOT NULL DEFAULT 'salchipapa',
-    image         TEXT,
-    image_fit     TEXT NOT NULL DEFAULT 'cover',
-    options_label TEXT NOT NULL DEFAULT 'Opción',
-    options       TEXT NOT NULL DEFAULT '[]',
-    ingredients   TEXT NOT NULL DEFAULT '[]',
-    allow_sauces  INTEGER NOT NULL DEFAULT 0,
-    allow_extras  INTEGER NOT NULL DEFAULT 0,
-    featured      INTEGER NOT NULL DEFAULT 0,
-    active        INTEGER NOT NULL DEFAULT 1,
-    archived      INTEGER NOT NULL DEFAULT 0,
-    sort          INTEGER NOT NULL DEFAULT 0,
-    created_at    INTEGER NOT NULL,
-    updated_at    INTEGER NOT NULL
-  );
+    id            INT PRIMARY KEY AUTO_INCREMENT,
+    category_id   INT,
+    name          VARCHAR(60) NOT NULL,
+    description   VARCHAR(240) NOT NULL DEFAULT '',
+    price         INT NOT NULL DEFAULT 0,
+    cost          INT,
+    icon          VARCHAR(40) NOT NULL DEFAULT 'salchipapa',
+    image         VARCHAR(255),
+    image_fit     VARCHAR(10) NOT NULL DEFAULT 'cover',
+    options_label VARCHAR(30) NOT NULL DEFAULT 'Opción',
+    options       TEXT NOT NULL,
+    ingredients   TEXT NOT NULL,
+    allow_sauces  TINYINT(1) NOT NULL DEFAULT 0,
+    allow_extras  TINYINT(1) NOT NULL DEFAULT 0,
+    featured      TINYINT(1) NOT NULL DEFAULT 0,
+    active        TINYINT(1) NOT NULL DEFAULT 1,
+    archived      TINYINT(1) NOT NULL DEFAULT 0,
+    sort          INT NOT NULL DEFAULT 0,
+    created_at    BIGINT NOT NULL,
+    updated_at    BIGINT NOT NULL,
+    FOREIGN KEY (category_id) REFERENCES categories(id)
+  ) ENGINE=InnoDB;
 
   CREATE TABLE sauces (
-    id       INTEGER PRIMARY KEY,
-    name     TEXT NOT NULL,
-    color    TEXT NOT NULL DEFAULT '#E0452B',
-    sort     INTEGER NOT NULL DEFAULT 0,
-    active   INTEGER NOT NULL DEFAULT 1,
-    archived INTEGER NOT NULL DEFAULT 0
-  );
+    id       INT PRIMARY KEY AUTO_INCREMENT,
+    name     VARCHAR(40) NOT NULL,
+    color    VARCHAR(10) NOT NULL DEFAULT '#E0452B',
+    sort     INT NOT NULL DEFAULT 0,
+    active   TINYINT(1) NOT NULL DEFAULT 1,
+    archived TINYINT(1) NOT NULL DEFAULT 0
+  ) ENGINE=InnoDB;
 
   CREATE TABLE extras (
-    id       INTEGER PRIMARY KEY,
-    name     TEXT NOT NULL,
-    price    INTEGER NOT NULL DEFAULT 0,
-    sort     INTEGER NOT NULL DEFAULT 0,
-    active   INTEGER NOT NULL DEFAULT 1,
-    archived INTEGER NOT NULL DEFAULT 0
-  );
+    id       INT PRIMARY KEY AUTO_INCREMENT,
+    name     VARCHAR(40) NOT NULL,
+    price    INT NOT NULL DEFAULT 0,
+    sort     INT NOT NULL DEFAULT 0,
+    active   TINYINT(1) NOT NULL DEFAULT 1,
+    archived TINYINT(1) NOT NULL DEFAULT 0
+  ) ENGINE=InnoDB;
 
-  CREATE TABLE orders (
-    id              INTEGER PRIMARY KEY,
-    turn            INTEGER NOT NULL,
-    business_day    TEXT NOT NULL,
-    type            TEXT NOT NULL CHECK (type IN ('mesa', 'llevar', 'domicilio')),
-    table_number    INTEGER,
-    customer_name   TEXT NOT NULL DEFAULT '',
-    phone           TEXT NOT NULL DEFAULT '',
-    address         TEXT NOT NULL DEFAULT '',
-    address_ref     TEXT NOT NULL DEFAULT '',
-    delivery_fee    INTEGER NOT NULL DEFAULT 0,
-    note            TEXT NOT NULL DEFAULT '',
-    status          TEXT NOT NULL DEFAULT 'recibido' CHECK (status IN ('recibido', 'listo', 'entregado', 'cancelado')),
-    subtotal        INTEGER NOT NULL DEFAULT 0,
-    total           INTEGER NOT NULL DEFAULT 0,
-    paid            INTEGER NOT NULL DEFAULT 0,
-    payment_method  TEXT,
-    amount_received INTEGER,
-    edit_count      INTEGER NOT NULL DEFAULT 0,
-    cancel_reason   TEXT NOT NULL DEFAULT '',
-    created_at      INTEGER NOT NULL,
-    updated_at      INTEGER NOT NULL,
-    ready_at        INTEGER,
-    delivered_at    INTEGER,
-    paid_at         INTEGER,
-    cancelled_at    INTEGER
-  );
-  CREATE UNIQUE INDEX orders_day_turn ON orders (business_day, turn);
-  CREATE INDEX orders_status ON orders (status, paid);
-
-  CREATE TABLE order_items (
-    id            INTEGER PRIMARY KEY,
-    order_id      INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    product_id    INTEGER,
-    category_id   INTEGER,
-    category_name TEXT NOT NULL DEFAULT '',
-    name          TEXT NOT NULL,
-    icon          TEXT NOT NULL DEFAULT '',
-    image         TEXT,
-    image_fit     TEXT NOT NULL DEFAULT 'cover',
-    option_label  TEXT NOT NULL DEFAULT '',
-    option_name   TEXT NOT NULL DEFAULT '',
-    qty           INTEGER NOT NULL DEFAULT 1,
-    unit_price    INTEGER NOT NULL DEFAULT 0,
-    unit_cost     INTEGER,
-    line_total    INTEGER NOT NULL DEFAULT 0,
-    removed       TEXT NOT NULL DEFAULT '[]',
-    aparte        TEXT NOT NULL DEFAULT '[]',
-    sauces        TEXT NOT NULL DEFAULT '[]',
-    extras        TEXT NOT NULL DEFAULT '[]',
-    note          TEXT NOT NULL DEFAULT '',
-    sort          INTEGER NOT NULL DEFAULT 0,
-    created_at    INTEGER NOT NULL
-  );
-  CREATE INDEX order_items_order ON order_items (order_id);
-  CREATE INDEX order_items_product ON order_items (product_id);
-  `,
-  // 2 · acceso por roles: cada equipo autorizado tiene su sesión
-  `
-  CREATE TABLE sessions (
-    id          TEXT PRIMARY KEY,
-    token_hash  TEXT NOT NULL UNIQUE,
-    role        TEXT NOT NULL CHECK (role IN ('admin', 'caja', 'pantalla')),
-    device      TEXT NOT NULL DEFAULT '',
-    user_agent  TEXT NOT NULL DEFAULT '',
-    ip          TEXT NOT NULL DEFAULT '',
-    created_at  INTEGER NOT NULL,
-    last_seen   INTEGER NOT NULL,
-    admin_until INTEGER,
-    revoked     INTEGER NOT NULL DEFAULT 0
-  );
-  CREATE INDEX sessions_role ON sessions (role, revoked);
-  `,
-  // 3 · usuarios con rol (reemplazan los PIN por equipo) y reparto de domicilios
-  `
   CREATE TABLE users (
-    id                  INTEGER PRIMARY KEY,
-    username            TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    name                TEXT NOT NULL,
-    role                TEXT NOT NULL CHECK (role IN ('admin', 'cajero', 'cocinero', 'repartidor')),
-    password            TEXT NOT NULL,
-    phone               TEXT NOT NULL DEFAULT '',
-    active              INTEGER NOT NULL DEFAULT 1,
-    must_change         INTEGER NOT NULL DEFAULT 0,
-    created_at          INTEGER NOT NULL,
-    updated_at          INTEGER NOT NULL,
-    password_changed_at INTEGER NOT NULL,
-    last_login_at       INTEGER
-  );
+    id                  INT PRIMARY KEY AUTO_INCREMENT,
+    username            VARCHAR(30) NOT NULL UNIQUE,
+    name                VARCHAR(60) NOT NULL,
+    role                VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'cajero', 'cocinero', 'repartidor')),
+    password            VARCHAR(255) NOT NULL,
+    phone               VARCHAR(30) NOT NULL DEFAULT '',
+    active              TINYINT(1) NOT NULL DEFAULT 1,
+    must_change         TINYINT(1) NOT NULL DEFAULT 0,
+    created_at          BIGINT NOT NULL,
+    updated_at          BIGINT NOT NULL,
+    password_changed_at BIGINT NOT NULL,
+    last_login_at       BIGINT
+  ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
-  DROP TABLE sessions;
   CREATE TABLE sessions (
-    id          TEXT PRIMARY KEY,
-    token_hash  TEXT NOT NULL UNIQUE,
-    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    device      TEXT NOT NULL DEFAULT '',
-    user_agent  TEXT NOT NULL DEFAULT '',
-    ip          TEXT NOT NULL DEFAULT '',
-    created_at  INTEGER NOT NULL,
-    last_seen   INTEGER NOT NULL,
-    expires_at  INTEGER NOT NULL,
-    revoked     INTEGER NOT NULL DEFAULT 0
-  );
+    id          VARCHAR(36) PRIMARY KEY,
+    token_hash  VARCHAR(64) NOT NULL UNIQUE,
+    user_id     INT NOT NULL,
+    device      VARCHAR(40) NOT NULL DEFAULT '',
+    user_agent  VARCHAR(200) NOT NULL DEFAULT '',
+    ip          VARCHAR(45) NOT NULL DEFAULT '',
+    created_at  BIGINT NOT NULL,
+    last_seen   BIGINT NOT NULL,
+    expires_at  BIGINT NOT NULL,
+    revoked     TINYINT(1) NOT NULL DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB;
   CREATE INDEX sessions_user ON sessions (user_id, revoked);
 
-  DELETE FROM settings WHERE key LIKE 'pin_%' OR key = 'adminPin';
-
-  -- SQLite no permite cambiar un CHECK: se reconstruye la tabla con el estado "en camino"
-  CREATE TABLE orders_v3 (
-    id              INTEGER PRIMARY KEY,
-    turn            INTEGER NOT NULL,
-    business_day    TEXT NOT NULL,
-    type            TEXT NOT NULL CHECK (type IN ('mesa', 'llevar', 'domicilio')),
-    table_number    INTEGER,
-    customer_name   TEXT NOT NULL DEFAULT '',
-    phone           TEXT NOT NULL DEFAULT '',
-    address         TEXT NOT NULL DEFAULT '',
-    address_ref     TEXT NOT NULL DEFAULT '',
-    delivery_fee    INTEGER NOT NULL DEFAULT 0,
-    note            TEXT NOT NULL DEFAULT '',
-    status          TEXT NOT NULL DEFAULT 'recibido' CHECK (status IN ('recibido', 'listo', 'en_camino', 'entregado', 'cancelado')),
-    subtotal        INTEGER NOT NULL DEFAULT 0,
-    total           INTEGER NOT NULL DEFAULT 0,
-    paid            INTEGER NOT NULL DEFAULT 0,
-    payment_method  TEXT,
-    amount_received INTEGER,
-    edit_count      INTEGER NOT NULL DEFAULT 0,
-    cancel_reason   TEXT NOT NULL DEFAULT '',
-    created_at      INTEGER NOT NULL,
-    updated_at      INTEGER NOT NULL,
-    ready_at        INTEGER,
-    delivered_at    INTEGER,
-    paid_at         INTEGER,
-    cancelled_at    INTEGER,
-    courier_id      INTEGER REFERENCES users(id),
-    dispatched_at   INTEGER,
-    created_by      INTEGER REFERENCES users(id),
-    paid_by         INTEGER REFERENCES users(id)
-  );
-  INSERT INTO orders_v3 (${ORDER_COLUMNS_V1}) SELECT ${ORDER_COLUMNS_V1} FROM orders;
-  DROP TABLE orders;
-  ALTER TABLE orders_v3 RENAME TO orders;
+  CREATE TABLE orders (
+    id              INT PRIMARY KEY AUTO_INCREMENT,
+    turn            INT NOT NULL,
+    business_day    VARCHAR(10) NOT NULL,
+    type            VARCHAR(12) NOT NULL CHECK (type IN ('mesa', 'llevar', 'domicilio')),
+    table_number    INT,
+    customer_name   VARCHAR(60) NOT NULL DEFAULT '',
+    phone           VARCHAR(30) NOT NULL DEFAULT '',
+    address         VARCHAR(160) NOT NULL DEFAULT '',
+    address_ref     VARCHAR(160) NOT NULL DEFAULT '',
+    delivery_fee    INT NOT NULL DEFAULT 0,
+    note            VARCHAR(400) NOT NULL DEFAULT '',
+    status          VARCHAR(12) NOT NULL DEFAULT 'recibido' CHECK (status IN ('recibido', 'listo', 'en_camino', 'entregado', 'cancelado')),
+    subtotal        INT NOT NULL DEFAULT 0,
+    total           INT NOT NULL DEFAULT 0,
+    paid            TINYINT(1) NOT NULL DEFAULT 0,
+    payment_method  VARCHAR(20),
+    amount_received INT,
+    edit_count      INT NOT NULL DEFAULT 0,
+    cancel_reason   VARCHAR(200) NOT NULL DEFAULT '',
+    created_at      BIGINT NOT NULL,
+    updated_at      BIGINT NOT NULL,
+    ready_at        BIGINT,
+    delivered_at    BIGINT,
+    paid_at         BIGINT,
+    cancelled_at    BIGINT,
+    courier_id      INT,
+    dispatched_at   BIGINT,
+    created_by      INT,
+    paid_by         INT,
+    FOREIGN KEY (courier_id) REFERENCES users(id),
+    FOREIGN KEY (created_by) REFERENCES users(id),
+    FOREIGN KEY (paid_by) REFERENCES users(id)
+  ) ENGINE=InnoDB;
   CREATE UNIQUE INDEX orders_day_turn ON orders (business_day, turn);
   CREATE INDEX orders_status ON orders (status, paid);
   CREATE INDEX orders_courier ON orders (courier_id, status);
+
+  CREATE TABLE order_items (
+    id            INT PRIMARY KEY AUTO_INCREMENT,
+    order_id      INT NOT NULL,
+    product_id    INT,
+    category_id   INT,
+    category_name VARCHAR(40) NOT NULL DEFAULT '',
+    name          VARCHAR(60) NOT NULL,
+    icon          VARCHAR(40) NOT NULL DEFAULT '',
+    image         VARCHAR(255),
+    image_fit     VARCHAR(10) NOT NULL DEFAULT 'cover',
+    option_label  VARCHAR(30) NOT NULL DEFAULT '',
+    option_name   VARCHAR(60) NOT NULL DEFAULT '',
+    qty           INT NOT NULL DEFAULT 1,
+    unit_price    INT NOT NULL DEFAULT 0,
+    unit_cost     INT,
+    line_total    INT NOT NULL DEFAULT 0,
+    removed       TEXT NOT NULL,
+    aparte        TEXT NOT NULL,
+    sauces        TEXT NOT NULL,
+    extras        TEXT NOT NULL,
+    note          VARCHAR(200) NOT NULL DEFAULT '',
+    sort          INT NOT NULL DEFAULT 0,
+    created_at    BIGINT NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB;
+  CREATE INDEX order_items_order ON order_items (order_id);
+  CREATE INDEX order_items_product ON order_items (product_id);
   `,
 ];
 
-/** Copia de la base antes de actualizarla (por si algo sale mal, se puede volver atrás). */
-function backupBefore(version) {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
-  const file = path.join(DATA_DIR, `respaldo-antes-de-actualizar-v${version}-${stamp}.db`);
+async function migrate() {
+  const connection = await pool.getConnection();
   try {
-    db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
-    console.log(`  ✓ Copia de seguridad antes de actualizar: ${path.basename(file)}`);
-  } catch (err) {
-    console.error('  ✗ No se pudo crear la copia de seguridad:', err.message);
-    throw err;
-  }
-}
-
-function migrate() {
-  const current = db.prepare('PRAGMA user_version').get().user_version;
-  if (current >= MIGRATIONS.length) return;
-  if (current > 0) backupBefore(current);
-  // las reconstrucciones de tablas necesitan las llaves foráneas apagadas (fuera de la transacción)
-  db.exec('PRAGMA foreign_keys = OFF');
-  try {
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version    INT PRIMARY KEY,
+        applied_at BIGINT NOT NULL
+      ) ENGINE=InnoDB
+    `);
+    const [[{ current }]] = await connection.query('SELECT COALESCE(MAX(version), 0) AS current FROM schema_migrations');
     for (let v = current; v < MIGRATIONS.length; v++) {
-      tx(() => {
-        db.exec(MIGRATIONS[v]);
-        const broken = db.prepare('PRAGMA foreign_key_check').all();
-        if (broken.length) throw new Error(`La migración ${v + 1} dejó referencias rotas`);
-        db.exec(`PRAGMA user_version = ${v + 1}`);
-      });
+      await connection.query(MIGRATIONS[v]);
+      await connection.query('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)', [v + 1, Date.now()]);
+      console.log(`  ✓ Migración ${v + 1} aplicada`);
     }
   } finally {
-    db.exec('PRAGMA foreign_keys = ON');
+    connection.release();
   }
 }
 
-const cache = new Map();
-function stmt(sql) {
-  let s = cache.get(sql);
-  if (!s) {
-    s = db.prepare(sql);
-    cache.set(sql, s);
-  }
-  return s;
-}
+// la conexión activa de la transacción en curso (si hay una) para que q.* la use sin
+// que cada función de servicio tenga que recibirla y pasarla a mano
+const als = new AsyncLocalStorage();
+const client = () => als.getStore() ?? pool;
 
 export const q = {
-  all: (sql, ...params) => stmt(sql).all(...params),
-  get: (sql, ...params) => stmt(sql).get(...params),
-  run: (sql, ...params) => stmt(sql).run(...params),
+  all: async (sql, ...params) => {
+    const [rows] = await client().query(sql, params);
+    return rows;
+  },
+  get: async (sql, ...params) => {
+    const [rows] = await client().query(sql, params);
+    return rows[0] ?? null;
+  },
+  run: async (sql, ...params) => {
+    const [result] = await client().query(sql, params);
+    // mysql2 trae FOUND_ROWS activo por defecto: affectedRows cuenta filas que hicieron
+    // match en el WHERE (como el "changes" de SQLite), no solo las que de verdad cambiaron
+    return { lastInsertRowid: result.insertId, changes: result.affectedRows };
+  },
 };
 
-let depth = 0;
-export function tx(fn) {
-  if (depth > 0) return fn();
-  depth++;
-  db.exec('BEGIN IMMEDIATE');
+export async function tx(fn) {
+  if (als.getStore()) return fn();
+  const connection = await pool.getConnection();
   try {
-    const result = fn();
-    db.exec('COMMIT');
+    await connection.beginTransaction();
+    const result = await als.run(connection, fn);
+    await connection.commit();
     return result;
   } catch (err) {
-    db.exec('ROLLBACK');
+    await connection.rollback();
     throw err;
   } finally {
-    depth--;
+    connection.release();
   }
 }
 
@@ -315,4 +257,4 @@ export const json = {
 /** Números en SQL IN (...): arma los signos de interrogación. */
 export const placeholders = (list) => list.map(() => '?').join(',');
 
-migrate();
+await migrate();

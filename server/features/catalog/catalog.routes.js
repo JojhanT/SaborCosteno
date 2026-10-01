@@ -14,26 +14,26 @@ const idParam = (req) => {
   return id;
 };
 
-catalogRouter.get('/catalog', (req, res) => res.json(getCatalog({ withCost: can(req.user, 'catalog.manage') })));
+catalogRouter.get('/catalog', async (req, res) => res.json(await getCatalog({ withCost: can(req.user, 'catalog.manage') })));
 
 for (const entity of Object.keys(savers)) {
-  catalogRouter.post(`/${entity}/reorder`, requireCatalog, (req, res) => {
-    reorder(entity, req.body?.ids);
+  catalogRouter.post(`/${entity}/reorder`, requireCatalog, async (req, res) => {
+    await reorder(entity, req.body?.ids);
     broadcast('catalog', {});
     res.json({ ok: true });
   });
-  catalogRouter.post(`/${entity}`, requireCatalog, (req, res) => {
-    const id = savers[entity](null, req.body ?? {});
+  catalogRouter.post(`/${entity}`, requireCatalog, async (req, res) => {
+    const id = await savers[entity](null, req.body ?? {});
     broadcast('catalog', {});
     res.status(201).json({ id });
   });
-  catalogRouter.put(`/${entity}/:id`, requireCatalog, (req, res) => {
-    const id = savers[entity](idParam(req), req.body ?? {});
+  catalogRouter.put(`/${entity}/:id`, requireCatalog, async (req, res) => {
+    const id = await savers[entity](idParam(req), req.body ?? {});
     broadcast('catalog', {});
     res.json({ id });
   });
-  catalogRouter.delete(`/${entity}/:id`, requireCatalog, (req, res) => {
-    archive(entity, idParam(req));
+  catalogRouter.delete(`/${entity}/:id`, requireCatalog, async (req, res) => {
+    await archive(entity, idParam(req));
     broadcast('catalog', {});
     res.json({ ok: true });
   });

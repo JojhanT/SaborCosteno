@@ -132,20 +132,19 @@ El servidor revisa cada permiso: aunque alguien escriba la dirección de otra pa
 
 ## Datos y copias de seguridad
 
-Todo queda en la carpeta **`data/`**: la base de datos `sabor.db` y las fotos en `uploads/`.
-Antes de cada actualización de la base, el sistema guarda sola una copia `respaldo-antes-de-actualizar-…db`.
-Para hacer una copia de seguridad manual, copia esa carpeta con el sistema apagado, o ejecuta `npm run respaldo` con el sistema andando: guarda la base en `data/respaldos/` y deja las últimas 30. Para pasar el sistema a otro computador, copia el proyecto completo con su carpeta `data/`.
+La base de datos vive en MySQL (contenedor `mysql` de `compose.yaml`, con su propio volumen `mysql_data`). Las fotos quedan en la carpeta **`data/uploads/`**.
+Para hacer una copia de seguridad, ejecuta `npm run respaldo` con el sistema andando: guarda un volcado (`mysqldump`) en `data/respaldos/` y deja los últimos 30. Para pasar el sistema a otro servidor, copia el volumen `mysql_data` (o restaura el último respaldo) y la carpeta `data/uploads/`.
 
 ## Para desarrolladores
 
-- **Servidor:** Node.js + Express 5 + SQLite (`node:sqlite`, sin dependencias nativas). El tiempo real va por Server‑Sent Events (`/api/stream`): cada cambio envía el estado de los pedidos activos **filtrado por rol** y el evento que lo causó (con quién lo hizo).
+- **Servidor:** Node.js + Express 5 + MySQL (`mysql2`). El tiempo real va por Server‑Sent Events (`/api/stream`): cada cambio envía el estado de los pedidos activos **filtrado por rol** y el evento que lo causó (con quién lo hizo).
 - **Cliente:** React 19 + TypeScript + Vite, con animaciones en `motion`. Las ilustraciones son SVG propias (`client/src/shared/components/Art.tsx`).
 - `npm run dev` levanta el servidor con recarga en caliente en el mismo puerto. `npm run typecheck` revisa los tipos.
 - Los precios siempre se recalculan en el servidor a partir del catálogo. Cada línea del pedido guarda una copia fija de nombre, categoría, precio y **costo unitario**, y modificaciones: los reportes históricos no cambian aunque luego se editen o borren productos.
 - Los permisos viven en un solo lugar: `server/features/auth/permissions.js`. El cliente recibe la lista del usuario en `/api/auth/me` y la usa para mostrar u ocultar pantallas y botones.
 - Seguridad: cookie de sesión `HttpOnly` + `SameSite=Lax` con token aleatorio (en la base solo se guarda su hash), cambios solo en JSON y desde el mismo origen (freno a CSRF), cabeceras `nosniff` / `X-Frame-Options`.
 
-Variables de entorno del servidor: `PORT`, `SABOR_DATA` (carpeta de datos), `PUBLIC_URL` (dirección pública) y `TRUST_PROXY` (detrás de un proxy). Ver `server/core/net.js` y [DESPLIEGUE.md](DESPLIEGUE.md).
+Variables de entorno del servidor: `PORT`, `SABOR_DATA` (carpeta de fotos), `PUBLIC_URL` (dirección pública), `TRUST_PROXY` (detrás de un proxy) y `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_PASSWORD`/`DB_NAME` (conexión a MySQL). Ver `server/core/net.js`, `server/core/db.js` y [DESPLIEGUE.md](DESPLIEGUE.md).
 
 Arquitectura por **features**: cada carpeta agrupa sus rutas, servicios, pantallas y estilos.
 

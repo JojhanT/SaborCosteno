@@ -29,8 +29,8 @@ export const DEFAULT_SETTINGS = {
 const NUMBER_KEYS = ['tables', 'dayCutoffHour', 'defaultDeliveryFee', 'kitchenWarnMinutes', 'kitchenLateMinutes'];
 const BOOLEAN_KEYS = ['showDeliveryOnTurns', 'turnsScreenEnabled'];
 
-export function getSettings() {
-  const rows = q.all('SELECT key, value FROM settings');
+export async function getSettings() {
+  const rows = await q.all('SELECT `key`, value FROM settings');
   const stored = {};
   for (const row of rows) {
     if (!(row.key in DEFAULT_SETTINGS)) continue;
@@ -45,7 +45,7 @@ export function getSettings() {
 
 export const publicSettings = () => getSettings();
 
-export function updateSettings(patch) {
+export async function updateSettings(patch) {
   const clean = {};
   for (const [key, value] of Object.entries(patch ?? {})) {
     if (!(key in DEFAULT_SETTINGS)) continue;
@@ -71,16 +71,17 @@ export function updateSettings(patch) {
   }
   if (clean.tables != null) clean.tables = Math.min(Math.max(clean.tables, 1), 60);
   if (clean.dayCutoffHour != null) clean.dayCutoffHour = Math.min(clean.dayCutoffHour, 11);
-  tx(() => {
+  await tx(async () => {
     for (const [key, value] of Object.entries(clean)) {
-      q.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', key, JSON.stringify(value));
+      await q.run('INSERT INTO settings (`key`, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)', key, JSON.stringify(value));
     }
   });
   return getSettings();
 }
 
 /** Día de operación (YYYY-MM-DD) en la zona horaria del negocio, respetando la hora de corte. */
-export function businessDay(ts = Date.now(), settings = getSettings()) {
+export async function businessDay(ts = Date.now(), settings) {
+  settings ??= await getSettings();
   const shifted = new Date(ts - settings.dayCutoffHour * 3_600_000);
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: settings.timezone || 'America/Bogota',

@@ -17,15 +17,15 @@ const RECOVERY_KEY = 'auth_recovery';
  * el administrador desde el PC del sistema, o desde otro equipo con el código que devuelve.
  */
 export function startRecovery() {
-  return tx(() => {
-    q.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', RECOVERY_KEY, JSON.stringify(Date.now()));
-    revokeAllSessions();
+  return tx(async () => {
+    await q.run('INSERT INTO settings (`key`, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)', RECOVERY_KEY, JSON.stringify(Date.now()));
+    await revokeAllSessions();
     return issueSetupCode();
   });
 }
 
-const inRecovery = () => !!q.get('SELECT 1 FROM settings WHERE key = ?', RECOVERY_KEY);
-export const setupRequired = () => activeAdmins() === 0 || inRecovery();
+const inRecovery = async () => !!(await q.get('SELECT 1 FROM settings WHERE `key` = ?', RECOVERY_KEY));
+export const setupRequired = async () => (await activeAdmins()) === 0 || (await inRecovery());
 
 /* ------------------------------------------------------------ helpers */
 
@@ -37,9 +37,9 @@ function logAuth(text) {
 }
 
 /** Toda la API (salvo /auth) exige una sesión válida. */
-export function authenticate(req, _res, next) {
+export async function authenticate(req, _res, next) {
   if (req.path.startsWith('/auth/')) return next();
-  const found = sessionFromReq(req);
+  const found = await sessionFromReq(req);
   if (!found) throw new HttpError(401, 'Tu sesión terminó. Vuelve a iniciar sesión.');
   req.session = found.session;
   req.user = found.user;
@@ -54,11 +54,11 @@ export const actorOf = (req) => (req.user ? { id: req.user.id, name: req.user.na
 
 export const authRouter = express.Router();
 
-authRouter.get('/auth/me', (req, res) => {
-  const found = sessionFromReq(req);
+authRouter.get('/auth/me', async (req, res) => {
+  const found = await sessionFromReq(req);
   res.json({
-    setupRequired: setupRequired(),
-    recovery: inRecovery(),
+    setupRequired: await setupRequired(),
+    recovery: await inRecovery(),
     canSetup: isLocal(req),
     user: publicUser(found?.user),
     session: found ? { id: found.session.id, device: found.session.device } : null,
@@ -66,28 +66,28 @@ authRouter.get('/auth/me', (req, res) => {
   });
 });
 
-authRouter.post('/auth/setup', (req, res) => {
-  if (!setupRequired()) throw new HttpError(409, 'El sistema ya tiene administrador');
+authRouter.post('/auth/setup', async (req, res) => {
+  if (!(await setupRequired())) throw new HttpError(409, 'El sistema ya tiene administrador');
   const { name, username, password, device, code } = req.body ?? {};
   // así nadie en el wifi o en internet puede adelantarse y crear la cuenta del dueño:
   // o se hace en el computador del sistema, o con el código que muestra su consola
   if (!isLocal(req)) {
     const ip = clientIp(req);
     guardIp(ip);
-    if (!checkSetupCode(code)) {
+    if (!(await checkSetupCode(code))) {
       ipFailed(ip);
       logAuth(`Código de instalación incorrecto desde ${ip}`);
       throw new HttpError(403, 'El código de instalación no es correcto. Revisa el que muestra la consola del servidor.');
     }
   }
-  const userId = tx(() => {
-    const existing = findByUsername(cleanUsername(username));
+  const userId = await tx(async () => {
+    const existing = await findByUsername(cleanUsername(username));
     let id;
     if (existing) {
       // recuperación: el usuario ya existía, se vuelve administrador con la nueva contraseña
       const pass = validatePassword(password, { username: existing.username, name: name || existing.name });
       const now = Date.now();
-      q.run(
+      await q.run(
         "UPDATE users SET name = ?, role = 'admin', active = 1, must_change = 0, password = ?, password_changed_at = ?, updated_at = ? WHERE id = ?",
         String(name ?? '').trim().slice(0, 60) || existing.name,
         hashPassword(pass),
@@ -97,26 +97,26 @@ authRouter.post('/auth/setup', (req, res) => {
       );
       id = existing.id;
     } else {
-      id = createUser({ name, username, password, role: 'admin' });
+      id = await createUser({ name, username, password, role: 'admin' });
     }
-    q.run('DELETE FROM settings WHERE key = ?', RECOVERY_KEY);
-    clearSetupCode();
+    await q.run('DELETE FROM settings WHERE `key` = ?', RECOVERY_KEY);
+    await clearSetupCode();
     return id;
   });
-  const user = q.get('SELECT * FROM users WHERE id = ?', userId);
-  q.run('UPDATE users SET last_login_at = ? WHERE id = ?', Date.now(), userId);
-  createSession(res, req, user, device);
+  const user = await q.get('SELECT * FROM users WHERE id = ?', userId);
+  await q.run('UPDATE users SET last_login_at = ? WHERE id = ?', Date.now(), userId);
+  await createSession(res, req, user, device);
   logAuth(`Cuenta de administrador lista: ${user.username}`);
   res.json({ ok: true });
 });
 
-authRouter.post('/auth/login', (req, res) => {
+authRouter.post('/auth/login', async (req, res) => {
   const ip = clientIp(req);
   const { username, password, device } = req.body ?? {};
   guardLogin(ip, username);
-  if (!q.get('SELECT 1 FROM users LIMIT 1')) throw new HttpError(409, 'Primero hay que crear la cuenta del administrador');
+  if (!(await q.get('SELECT 1 FROM users LIMIT 1'))) throw new HttpError(409, 'Primero hay que crear la cuenta del administrador');
   const name = String(username ?? '').trim().toLowerCase();
-  const user = name ? findByUsername(name) : null;
+  const user = name ? await findByUsername(name) : null;
   // se verifica siempre (aunque el usuario no exista) para que todas las respuestas tarden igual
   const ok = verifyPassword(String(password ?? ''), user?.password ?? null);
   if (!user || !ok) {
@@ -127,38 +127,38 @@ authRouter.post('/auth/login', (req, res) => {
   if (!user.active) throw new HttpError(403, 'Este usuario está desactivado. Habla con el administrador.');
   loginSucceeded(ip, name);
   const now = Date.now();
-  if (needsRehash(user.password)) q.run('UPDATE users SET password = ? WHERE id = ?', hashPassword(password), user.id);
-  q.run('UPDATE users SET last_login_at = ? WHERE id = ?', now, user.id);
+  if (needsRehash(user.password)) await q.run('UPDATE users SET password = ? WHERE id = ?', hashPassword(password), user.id);
+  await q.run('UPDATE users SET last_login_at = ? WHERE id = ?', now, user.id);
   // si el equipo ya tenía una sesión (de otro usuario, por ejemplo), se cierra
-  const old = sessionFromReq(req);
-  if (old) revokeSessions([old.session.id]);
-  createSession(res, req, user, device);
+  const old = await sessionFromReq(req);
+  if (old) await revokeSessions([old.session.id]);
+  await createSession(res, req, user, device);
   logAuth(`${user.name} (${ROLE_LABEL[user.role]}) inició sesión desde ${ip}`);
   res.json({ ok: true });
 });
 
-authRouter.post('/auth/logout', (req, res) => {
-  const found = sessionFromReq(req);
-  if (found) revokeSessions([found.session.id]);
+authRouter.post('/auth/logout', async (req, res) => {
+  const found = await sessionFromReq(req);
+  if (found) await revokeSessions([found.session.id]);
   clearCookie(res);
   res.json({ ok: true });
 });
 
 /** Cambiar la contraseña propia. Cierra la sesión en los demás equipos. */
-authRouter.post('/auth/password', (req, res) => {
-  const found = sessionFromReq(req);
+authRouter.post('/auth/password', async (req, res) => {
+  const found = await sessionFromReq(req);
   if (!found) throw new HttpError(401, 'Tu sesión terminó. Vuelve a iniciar sesión.');
   const ip = clientIp(req);
   guardIp(ip);
   const { current, next } = req.body ?? {};
-  const row = q.get('SELECT password FROM users WHERE id = ?', found.user.id);
+  const row = await q.get('SELECT password FROM users WHERE id = ?', found.user.id);
   if (!verifyPassword(String(current ?? ''), row?.password ?? null)) {
     ipFailed(ip);
     throw new HttpError(401, 'La contraseña actual no es correcta');
   }
   if (String(current) === String(next)) throw new HttpError(400, 'La nueva contraseña debe ser distinta a la actual');
-  changeOwnPassword(found.user.id, next);
-  const closed = revokeUserSessions(found.user.id, found.session.id);
+  await changeOwnPassword(found.user.id, next);
+  const closed = await revokeUserSessions(found.user.id, found.session.id);
   logAuth(`${found.user.name} cambió su contraseña`);
   res.json({ ok: true, closedSessions: closed });
 });

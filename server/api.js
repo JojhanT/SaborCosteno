@@ -22,8 +22,8 @@ export const api = express.Router();
 
 api.use(sameOriginOnly);
 // para Docker y monitores: responde si el servidor y la base están bien
-api.get('/health', (_req, res) => {
-  q.get('SELECT 1');
+api.get('/health', async (_req, res) => {
+  await q.get('SELECT 1');
   res.json({ ok: true });
 });
 // sin sesión solo se puede usar /auth (iniciar sesión, configuración inicial)
@@ -33,15 +33,16 @@ api.use(authenticate);
 // las conexiones en vivo se revisan cada minuto (sesión vencida o usuario desactivado)
 setStreamValidator((client) => validateSessionId(client.sessionId));
 
-api.get('/bootstrap', (req, res) => {
+api.get('/bootstrap', async (req, res) => {
+  const [settings, catalog, turn, day] = await Promise.all([publicSettings(), getCatalog({ withCost: can(req.user, 'catalog.manage') }), nextTurn(), businessDay()]);
   res.json({
-    settings: publicSettings(),
-    catalog: getCatalog({ withCost: can(req.user, 'catalog.manage') }),
+    settings,
+    catalog,
     lan: lanUrls(),
     online: !!PUBLIC_URL,
     serverTime: Date.now(),
-    nextTurn: nextTurn(),
-    businessDay: businessDay(),
+    nextTurn: turn,
+    businessDay: day,
   });
 });
 

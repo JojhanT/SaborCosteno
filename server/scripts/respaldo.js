@@ -1,9 +1,13 @@
-// Copia de seguridad de la base sin apagar el sistema: data/respaldos/sabor-AAAA-MM-DD-HHMM.db
+// Copia de seguridad de la base: data/respaldos/sabor-AAAA-MM-DD-HHMM.sql
 // Deja las últimas N copias (por defecto 30; se cambia con RESPALDOS_MAX).
 // Las fotos no se copian: viven en data/uploads y nunca cambian una vez subidas.
 import fs from 'node:fs';
 import path from 'node:path';
-import { db, DATA_DIR } from '../core/db.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { pool, DATA_DIR } from '../core/db.js';
+
+const run = promisify(execFile);
 
 const KEEP = Math.max(1, Number(process.env.RESPALDOS_MAX) || 30);
 const DIR = path.join(DATA_DIR, 'respaldos');
@@ -12,17 +16,24 @@ fs.mkdirSync(DIR, { recursive: true });
 const d = new Date();
 const pad = (n) => String(n).padStart(2, '0');
 const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
-const file = path.join(DIR, `sabor-${stamp}.db`);
+const file = path.join(DIR, `sabor-${stamp}.sql`);
 
-fs.rmSync(file, { force: true });
-// VACUUM INTO arma una copia consistente aunque la caja esté trabajando
-db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
-db.close();
+const { stdout } = await run('mysqldump', [
+  `--host=${process.env.DB_HOST || 'localhost'}`,
+  `--port=${process.env.DB_PORT || 3306}`,
+  `--user=${process.env.DB_USER || 'root'}`,
+  `--password=${process.env.DB_PASSWORD || ''}`,
+  '--single-transaction',
+  '--routines',
+  process.env.DB_NAME || 'sabor',
+], { maxBuffer: 1024 * 1024 * 1024 });
+fs.writeFileSync(file, stdout);
+await pool.end();
 console.log(`  ✓ Copia de seguridad: ${path.relative(DATA_DIR, file)}`);
 
 const old = fs
   .readdirSync(DIR)
-  .filter((f) => /^sabor-[\d-]+\.db$/.test(f))
+  .filter((f) => /^sabor-[\d-]+\.sql$/.test(f))
   .sort()
   .slice(0, -KEEP);
 for (const f of old) fs.rmSync(path.join(DIR, f));

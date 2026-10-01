@@ -95,11 +95,11 @@ setInterval(() => {
   broadcast('ping', { serverTime: Date.now(), build: buildId() });
 }, 15000).unref();
 
-setInterval(() => {
+setInterval(async () => {
   // las pantallas abiertas mantienen viva su sesión; las vencidas o desactivadas se cortan
   if (!hooks.validate) return;
   for (const [res, c] of clients) {
-    const user = hooks.validate(c);
+    const user = await hooks.validate(c);
     if (!user) close(res);
     else c.user = user;
   }

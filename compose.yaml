@@ -9,14 +9,45 @@ services:
     image: sabor-costeno
     restart: unless-stopped
     init: true
+    depends_on:
+      mysql:
+        condition: service_healthy
     environment:
       PUBLIC_URL: https://${DOMINIO:?Falta DOMINIO en el archivo .env}
       # solo se cree la IP que reporta Caddy (red interna de Docker)
       TRUST_PROXY: uniquelocal
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE:?Falta MYSQL_DATABASE en el archivo .env}
+      DB_USER: ${MYSQL_USER:?Falta MYSQL_USER en el archivo .env}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Falta MYSQL_PASSWORD en el archivo .env}
     volumes:
-      # base de datos, fotos y respaldos: quedan en la carpeta ./data del servidor
+      # fotos y respaldos: quedan en la carpeta ./data del servidor
       - ./data:/data
     # sin "ports": la app no queda expuesta a internet, solo Caddy la alcanza
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  mysql:
+    image: mysql:8
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Falta MYSQL_ROOT_PASSWORD en el archivo .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Falta MYSQL_DATABASE en el archivo .env}
+      MYSQL_USER: ${MYSQL_USER:?Falta MYSQL_USER en el archivo .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Falta MYSQL_PASSWORD en el archivo .env}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    # sin "ports": solo la app (en la misma red de Docker) se conecta a MySQL
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     logging:
       driver: json-file
       options:
@@ -48,3 +79,5 @@ volumes:
   # certificados HTTPS: si se borran, Caddy los vuelve a pedir
   caddy_data:
   caddy_config:
+  # datos de MySQL: pedidos, catálogo, usuarios... si se borra, se pierde todo
+  mysql_data:

@@ -113,16 +113,17 @@ const EXTRAS = [
   ['Maduro', 2000],
 ];
 
-export function seedIfEmpty() {
-  if (q.get('SELECT COUNT(*) AS n FROM categories').n > 0) return false;
+export async function seedIfEmpty() {
+  if ((await q.get('SELECT COUNT(*) AS n FROM categories')).n > 0) return false;
   const now = Date.now();
-  tx(() => {
+  await tx(async () => {
     let productSort = 0;
-    MENU.forEach((cat, ci) => {
-      const categoryId = Number(q.run('INSERT INTO categories (name, icon, sort) VALUES (?, ?, ?)', cat.category, cat.icon, ci).lastInsertRowid);
+    for (const [ci, cat] of MENU.entries()) {
+      const { lastInsertRowid } = await q.run('INSERT INTO categories (name, icon, sort) VALUES (?, ?, ?)', cat.category, cat.icon, ci);
+      const categoryId = Number(lastInsertRowid);
       for (const p of cat.products) {
         const price = p.price ?? p.options?.[0]?.price ?? 0;
-        q.run(
+        await q.run(
           `INSERT INTO products (category_id, name, description, price, icon, options_label, options, ingredients,
              allow_sauces, allow_extras, featured, sort, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -142,9 +143,9 @@ export function seedIfEmpty() {
           now,
         );
       }
-    });
-    SAUCES.forEach(([name, color], i) => q.run('INSERT INTO sauces (name, color, sort) VALUES (?, ?, ?)', name, color, i));
-    EXTRAS.forEach(([name, price], i) => q.run('INSERT INTO extras (name, price, sort) VALUES (?, ?, ?)', name, price, i));
+    }
+    for (const [i, [name, color]] of SAUCES.entries()) await q.run('INSERT INTO sauces (name, color, sort) VALUES (?, ?, ?)', name, color, i);
+    for (const [i, [name, price]] of EXTRAS.entries()) await q.run('INSERT INTO extras (name, price, sort) VALUES (?, ?, ?)', name, price, i);
   });
   return true;
 }

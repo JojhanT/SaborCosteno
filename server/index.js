@@ -2,7 +2,7 @@ import express from 'express';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { db, ROOT, UPLOADS_DIR, DATA_DIR } from './core/db.js';
+import { pool, ROOT, UPLOADS_DIR, DATA_DIR } from './core/db.js';
 import { lanUrls, PORT, PUBLIC_URL, trustProxy } from './core/net.js';
 import { securityHeaders } from './core/security.js';
 import { seedIfEmpty } from './features/catalog/seed.js';
@@ -15,7 +15,7 @@ const dev = process.argv.includes('--dev');
 const CLIENT_DIR = path.join(ROOT, 'client');
 const DIST_DIR = path.join(CLIENT_DIR, 'dist');
 
-if (seedIfEmpty()) console.log('  ✓ Menú de ejemplo cargado (puedes editarlo en /admin)');
+if (await seedIfEmpty()) console.log('  ✓ Menú de ejemplo cargado (puedes editarlo en /admin)');
 
 const app = express();
 const server = http.createServer(app);
@@ -75,9 +75,9 @@ server.on('error', (err) => {
 
 // Docker (o Ctrl+C) pide apagar: se cierra la base ordenadamente antes de salir
 for (const signal of ['SIGTERM', 'SIGINT']) {
-  process.on(signal, () => {
+  process.on(signal, async () => {
     try {
-      db.close();
+      await pool.end();
     } catch {
       /* ya estaba cerrada */
     }
@@ -85,7 +85,7 @@ for (const signal of ['SIGTERM', 'SIGINT']) {
   });
 }
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '0.0.0.0', async () => {
   const lan = lanUrls();
   const line = '─'.repeat(58);
   console.log(`\n  ${line}`);
@@ -100,12 +100,12 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('   Caja             /caja');
   console.log('   Cocina (TV)      /cocina');
   console.log('   Repartidores     /reparto');
-  if (getSettings().turnsScreenEnabled) console.log('   Turnos (TV)      /turnos');
+  if ((await getSettings()).turnsScreenEnabled) console.log('   Turnos (TV)      /turnos');
   console.log('   Administración   /admin');
   console.log(`   Datos            ${DATA_DIR}`);
-  if (setupRequired()) {
+  if (await setupRequired()) {
     console.log('\n   ⚠ Falta la cuenta del administrador. Ábrela en este equipo o, desde');
-    console.log(`     otro, escribe el código de instalación:   ${issueSetupCode()}`);
+    console.log(`     otro, escribe el código de instalación:   ${await issueSetupCode()}`);
   }
   console.log(`  ${line}\n`);
 });

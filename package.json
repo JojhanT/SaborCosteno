@@ -8,15 +8,16 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "dev": "node --disable-warning=ExperimentalWarning server/index.js --dev",
+    "dev": "node server/index.js --dev",
     "build": "vite build --config client/vite.config.ts",
-    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "start": "node server/index.js",
     "typecheck": "tsc -p client --noEmit",
-    "reset-claves": "node --disable-warning=ExperimentalWarning server/scripts/reset-claves.js",
-    "respaldo": "node --disable-warning=ExperimentalWarning server/scripts/respaldo.js"
+    "reset-claves": "node server/scripts/reset-claves.js",
+    "respaldo": "node server/scripts/respaldo.js"
   },
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "mysql2": "^3.15.4"
   },
   "devDependencies": {
     "@fontsource-variable/outfit": "^5.3.0",

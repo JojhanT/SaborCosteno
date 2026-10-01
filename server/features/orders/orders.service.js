@@ -77,53 +77,55 @@ function serializeOrder(r, items = [], names = new Map()) {
   };
 }
 
-function withItems(rows) {
+async function withItems(rows) {
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
   const byOrder = new Map(ids.map((id) => [id, []]));
-  const items = q.all(`SELECT * FROM order_items WHERE order_id IN (${placeholders(ids)}) ORDER BY sort, id`, ...ids);
+  const items = await q.all(`SELECT * FROM order_items WHERE order_id IN (${placeholders(ids)}) ORDER BY sort, id`, ...ids);
   for (const it of items) byOrder.get(it.order_id)?.push(serializeItem(it));
   // nombres de quien tomó, cobró o lleva el pedido
   const people = [...new Set(rows.flatMap((r) => [r.courier_id, r.created_by, r.paid_by]).filter(Boolean))];
-  const names = new Map(people.length ? q.all(`SELECT id, name FROM users WHERE id IN (${placeholders(people)})`, ...people).map((u) => [u.id, u.name]) : []);
+  const names = new Map(people.length ? (await q.all(`SELECT id, name FROM users WHERE id IN (${placeholders(people)})`, ...people)).map((u) => [u.id, u.name]) : []);
   return rows.map((r) => serializeOrder(r, byOrder.get(r.id), names));
 }
 
-export function getOrder(id) {
-  const row = q.get('SELECT * FROM orders WHERE id = ?', Number(id));
+export async function getOrder(id) {
+  const row = await q.get('SELECT * FROM orders WHERE id = ?', Number(id));
   if (!row) throw new HttpError(404, 'Pedido no encontrado');
-  return withItems([row])[0];
+  return (await withItems([row]))[0];
 }
 
 /** Pedidos "vivos": en cocina, listos, en camino o entregados pendientes de cobro. */
-export function activeOrders() {
+export async function activeOrders() {
   return withItems(
-    q.all(`SELECT * FROM orders
+    await q.all(`SELECT * FROM orders
            WHERE status IN ('recibido', 'listo', 'en_camino') OR (status = 'entregado' AND paid = 0)
            ORDER BY created_at, id`),
   );
 }
 
-export function dayOrders(day) {
-  return withItems(q.all('SELECT * FROM orders WHERE business_day = ? ORDER BY turn DESC', day));
+export async function dayOrders(day) {
+  return withItems(await q.all('SELECT * FROM orders WHERE business_day = ? ORDER BY turn DESC', day));
 }
 
 /** Domicilios de un repartidor: los que lleva y los que ya entregó hoy. */
-export function courierOrders(courierId, day = businessDay()) {
+export async function courierOrders(courierId, day) {
+  day ??= await businessDay();
   const where = courierId == null ? '' : 'AND courier_id = ?';
   const args = courierId == null ? [] : [courierId];
-  return {
-    active: withItems(q.all(`SELECT * FROM orders WHERE status = 'en_camino' ${where} ORDER BY dispatched_at, id`, ...args)),
-    delivered: withItems(q.all(`SELECT * FROM orders WHERE status = 'entregado' AND courier_id IS NOT NULL AND business_day = ? ${where} ORDER BY delivered_at DESC`, day, ...args)),
-  };
+  const [active, delivered] = await Promise.all([
+    q.all(`SELECT * FROM orders WHERE status = 'en_camino' ${where} ORDER BY dispatched_at, id`, ...args),
+    q.all(`SELECT * FROM orders WHERE status = 'entregado' AND courier_id IS NOT NULL AND business_day = ? ${where} ORDER BY delivered_at DESC`, day, ...args),
+  ]);
+  return { active: await withItems(active), delivered: await withItems(delivered) };
 }
 
-export function nextTurn() {
-  return q.get('SELECT COALESCE(MAX(turn), 0) + 1 AS n FROM orders WHERE business_day = ?', businessDay()).n;
+export async function nextTurn() {
+  return (await q.get('SELECT COALESCE(MAX(turn), 0) + 1 AS n FROM orders WHERE business_day = ?', await businessDay())).n;
 }
 
-export function daySummary(day) {
-  const rows = q.all('SELECT * FROM orders WHERE business_day = ?', day);
+export async function daySummary(day) {
+  const rows = await q.all('SELECT * FROM orders WHERE business_day = ?', day);
   const valid = rows.filter((r) => r.status !== 'cancelado');
   const paid = valid.filter((r) => r.paid);
   const byMethod = Object.fromEntries(PAYMENT_METHODS.map((m) => [m, 0]));
@@ -132,6 +134,26 @@ export function daySummary(day) {
   for (const r of valid) byType[r.type]++;
   const prep = valid.filter((r) => r.ready_at).map((r) => r.ready_at - r.created_at);
   const sales = paid.reduce((s, r) => s + r.total, 0);
+  const [byCourier, topProducts] = await Promise.all([
+    q.all(
+      `SELECT u.id, u.name,
+              COUNT(*) AS orders,
+              SUM(CASE WHEN o.status = 'entregado' THEN 1 ELSE 0 END) AS delivered,
+              SUM(o.total) AS total,
+              SUM(CASE WHEN o.paid = 0 THEN o.total ELSE 0 END) AS pending
+         FROM orders o JOIN users u ON u.id = o.courier_id
+        WHERE o.business_day = ? AND o.status IN ('en_camino', 'entregado')
+        GROUP BY u.id ORDER BY orders DESC, u.name`,
+      day,
+    ),
+    q.all(
+      `SELECT oi.name, oi.icon, SUM(oi.qty) AS qty, SUM(oi.line_total) AS total
+         FROM order_items oi JOIN orders o ON o.id = oi.order_id
+        WHERE o.business_day = ? AND o.status != 'cancelado'
+        GROUP BY oi.product_id, oi.name ORDER BY qty DESC, total DESC LIMIT 5`,
+      day,
+    ),
+  ]);
   return {
     orders: valid.length,
     cancelled: rows.length - valid.length,
@@ -143,28 +165,12 @@ export function daySummary(day) {
     byMethod,
     byType,
     // cuánto llevó y cuánto le falta entregar a la caja cada repartidor
-    byCourier: q.all(
-      `SELECT u.id, u.name,
-              COUNT(*) AS orders,
-              SUM(CASE WHEN o.status = 'entregado' THEN 1 ELSE 0 END) AS delivered,
-              SUM(o.total) AS total,
-              SUM(CASE WHEN o.paid = 0 THEN o.total ELSE 0 END) AS pending
-         FROM orders o JOIN users u ON u.id = o.courier_id
-        WHERE o.business_day = ? AND o.status IN ('en_camino', 'entregado')
-        GROUP BY u.id ORDER BY orders DESC, u.name`,
-      day,
-    ),
-    topProducts: q.all(
-      `SELECT oi.name, oi.icon, SUM(oi.qty) AS qty, SUM(oi.line_total) AS total
-         FROM order_items oi JOIN orders o ON o.id = oi.order_id
-        WHERE o.business_day = ? AND o.status != 'cancelado'
-        GROUP BY oi.product_id, oi.name ORDER BY qty DESC, total DESC LIMIT 5`,
-      day,
-    ),
+    byCourier,
+    topProducts,
   };
 }
 
-/* ---------------------------------------------------------- construcción */
+/* ------------------------------------------------------------ construcción */
 
 function orderInfo(body, settings) {
   const type = body.type;
@@ -194,14 +200,16 @@ function orderInfo(body, settings) {
 }
 
 /** Calcula precios en el servidor a partir del catálogo; el cliente solo envía elecciones. */
-function buildItems(list, prevItems = new Map()) {
+async function buildItems(list, prevItems = new Map()) {
   if (!Array.isArray(list) || !list.length) throw new HttpError(400, 'El pedido no tiene productos');
-  const sauces = new Map(q.all('SELECT * FROM sauces').map((s) => [s.id, s]));
-  const extras = new Map(q.all('SELECT * FROM extras').map((e) => [e.id, e]));
-  const categories = new Map(q.all('SELECT * FROM categories').map((c) => [c.id, c]));
+  const [sauceRows, extraRows, categoryRows] = await Promise.all([q.all('SELECT * FROM sauces'), q.all('SELECT * FROM extras'), q.all('SELECT * FROM categories')]);
+  const sauces = new Map(sauceRows.map((s) => [s.id, s]));
+  const extras = new Map(extraRows.map((e) => [e.id, e]));
+  const categories = new Map(categoryRows.map((c) => [c.id, c]));
 
-  return list.slice(0, 100).map((raw, index) => {
-    const product = q.get('SELECT * FROM products WHERE id = ?', Number(raw?.productId));
+  const result = [];
+  for (const [index, raw] of list.slice(0, 100).entries()) {
+    const product = await q.get('SELECT * FROM products WHERE id = ?', Number(raw?.productId));
     if (!product) throw new HttpError(400, 'Uno de los productos ya no existe');
     const prev = raw.id != null ? prevItems.get(Number(raw.id)) : undefined;
     if (!prev && (!product.active || product.archived)) throw new HttpError(400, `${product.name} no está disponible`);
@@ -237,7 +245,7 @@ function buildItems(list, prevItems = new Map()) {
           .map((e) => ({ id: e.id, name: e.name, price: e.price }));
 
     const unit = base + itemExtras.reduce((s, e) => s + e.price, 0);
-    return {
+    result.push({
       prevId: prev ? prev.id : null,
       prevCreatedAt: prev ? prev.created_at : null,
       row: {
@@ -261,14 +269,15 @@ function buildItems(list, prevItems = new Map()) {
         note: str(raw.note, 200),
         sort: index,
       },
-    };
-  });
+    });
+  }
+  return result;
 }
 
 const ITEM_COLUMNS = ['product_id', 'category_id', 'category_name', 'name', 'icon', 'image', 'image_fit', 'option_label', 'option_name', 'qty', 'unit_price', 'unit_cost', 'line_total', 'removed', 'aparte', 'sauces', 'extras', 'note', 'sort'];
 
 function insertItem(orderId, row, createdAt) {
-  q.run(
+  return q.run(
     `INSERT INTO order_items (order_id, ${ITEM_COLUMNS.join(', ')}, created_at) VALUES (?, ${ITEM_COLUMNS.map(() => '?').join(', ')}, ?)`,
     orderId,
     ...ITEM_COLUMNS.map((c) => row[c]),
@@ -293,61 +302,60 @@ function paymentFields(total, payment) {
 
 /* ------------------------------------------------------------- escritura */
 
-export function createOrder(body, actor = null) {
-  const settings = getSettings();
+export async function createOrder(body, actor = null) {
+  const settings = await getSettings();
   const now = Date.now();
   const info = orderInfo(body ?? {}, settings);
-  return tx(() => {
-    const built = buildItems(body.items);
+  return tx(async () => {
+    const built = await buildItems(body.items);
     const subtotal = built.reduce((s, b) => s + b.row.line_total, 0);
     const total = subtotal + info.delivery_fee;
-    const day = businessDay(now, settings);
-    const turn = q.get('SELECT COALESCE(MAX(turn), 0) + 1 AS n FROM orders WHERE business_day = ?', day).n;
+    const day = await businessDay(now, settings);
+    const turn = (await q.get('SELECT COALESCE(MAX(turn), 0) + 1 AS n FROM orders WHERE business_day = ?', day)).n;
     const pay = body.payment ? paymentFields(total, body.payment) : null;
 
-    const id = Number(
-      q.run(
-        `INSERT INTO orders (turn, business_day, type, table_number, customer_name, phone, address, address_ref, delivery_fee, note,
-           status, subtotal, total, paid, payment_method, amount_received, created_at, updated_at, paid_at, created_by, paid_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recibido', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        turn,
-        day,
-        info.type,
-        info.table_number,
-        info.customer_name,
-        info.phone,
-        info.address,
-        info.address_ref,
-        info.delivery_fee,
-        info.note,
-        subtotal,
-        total,
-        pay ? 1 : 0,
-        pay?.method ?? null,
-        pay?.received ?? null,
-        now,
-        now,
-        pay ? now : null,
-        actor?.id ?? null,
-        pay ? (actor?.id ?? null) : null,
-      ).lastInsertRowid,
+    const { lastInsertRowid } = await q.run(
+      `INSERT INTO orders (turn, business_day, type, table_number, customer_name, phone, address, address_ref, delivery_fee, note,
+         status, subtotal, total, paid, payment_method, amount_received, created_at, updated_at, paid_at, created_by, paid_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recibido', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      turn,
+      day,
+      info.type,
+      info.table_number,
+      info.customer_name,
+      info.phone,
+      info.address,
+      info.address_ref,
+      info.delivery_fee,
+      info.note,
+      subtotal,
+      total,
+      pay ? 1 : 0,
+      pay?.method ?? null,
+      pay?.received ?? null,
+      now,
+      now,
+      pay ? now : null,
+      actor?.id ?? null,
+      pay ? (actor?.id ?? null) : null,
     );
-    for (const b of built) insertItem(id, b.row, now);
+    const id = Number(lastInsertRowid);
+    for (const b of built) await insertItem(id, b.row, now);
     return getOrder(id);
   });
 }
 
-export function updateOrder(id, body) {
-  const settings = getSettings();
+export async function updateOrder(id, body) {
+  const settings = await getSettings();
   const now = Date.now();
-  return tx(() => {
-    const order = q.get('SELECT * FROM orders WHERE id = ?', Number(id));
+  return tx(async () => {
+    const order = await q.get('SELECT * FROM orders WHERE id = ?', Number(id));
     if (!order) throw new HttpError(404, 'Pedido no encontrado');
     if (order.status === 'cancelado') throw new HttpError(409, 'El pedido está cancelado');
     const info = orderInfo(body ?? {}, settings);
-    const prevRows = q.all('SELECT * FROM order_items WHERE order_id = ? ORDER BY sort, id', order.id);
+    const prevRows = await q.all('SELECT * FROM order_items WHERE order_id = ? ORDER BY sort, id', order.id);
     const prevMap = new Map(prevRows.map((r) => [r.id, r]));
-    const built = buildItems(body.items, prevMap);
+    const built = await buildItems(body.items, prevMap);
     const subtotal = built.reduce((s, b) => s + b.row.line_total, 0);
     const total = subtotal + info.delivery_fee;
     if (order.paid && total !== order.total) {
@@ -360,12 +368,12 @@ export function updateOrder(id, body) {
     const backToKitchen = itemsChanged && order.status !== 'recibido';
 
     const keep = new Set(built.filter((b) => b.prevId).map((b) => b.prevId));
-    for (const r of prevRows) if (!keep.has(r.id)) q.run('DELETE FROM order_items WHERE id = ?', r.id);
+    for (const r of prevRows) if (!keep.has(r.id)) await q.run('DELETE FROM order_items WHERE id = ?', r.id);
     for (const b of built) {
       if (b.prevId) {
-        q.run(`UPDATE order_items SET ${ITEM_COLUMNS.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`, ...ITEM_COLUMNS.map((c) => b.row[c]), b.prevId);
+        await q.run(`UPDATE order_items SET ${ITEM_COLUMNS.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`, ...ITEM_COLUMNS.map((c) => b.row[c]), b.prevId);
       } else {
-        insertItem(order.id, b.row, now);
+        await insertItem(order.id, b.row, now);
       }
     }
 
@@ -373,7 +381,7 @@ export function updateOrder(id, body) {
     const dropCourier = backToKitchen || info.type !== 'domicilio';
     const status = backToKitchen ? 'recibido' : order.status === 'en_camino' && dropCourier ? 'listo' : order.status;
 
-    q.run(
+    await q.run(
       `UPDATE orders SET type = ?, table_number = ?, customer_name = ?, phone = ?, address = ?, address_ref = ?, delivery_fee = ?, note = ?,
          subtotal = ?, total = ?, updated_at = ?, edit_count = edit_count + ?, status = ?,
          ready_at = CASE WHEN ? THEN NULL ELSE ready_at END,
@@ -400,12 +408,12 @@ export function updateOrder(id, body) {
       dropCourier ? 1 : 0,
       order.id,
     );
-    return { order: getOrder(order.id), itemsChanged, backToKitchen, prevCourierId: order.courier_id };
+    return { order: await getOrder(order.id), itemsChanged, backToKitchen, prevCourierId: order.courier_id };
   });
 }
 
-export function findOrderRow(id) {
-  const order = q.get('SELECT * FROM orders WHERE id = ?', Number(id));
+export async function findOrderRow(id) {
+  const order = await q.get('SELECT * FROM orders WHERE id = ?', Number(id));
   if (!order) throw new HttpError(404, 'Pedido no encontrado');
   return order;
 }
@@ -414,15 +422,15 @@ export function findOrderRow(id) {
  * recibido → vuelve a cocina · listo → sale de cocina · entregado → cerrado.
  * Volver a cocina o a "listo" le quita el repartidor a un domicilio en camino.
  */
-export function setStatus(id, status) {
+export async function setStatus(id, status) {
   if (!FLOW_STATUSES.includes(status)) throw new HttpError(400, 'Estado no válido');
-  const order = findOrderRow(id);
+  const order = await findOrderRow(id);
   if (order.status === 'cancelado') throw new HttpError(409, 'El pedido está cancelado');
   const now = Date.now();
   if (status === 'recibido') {
-    q.run("UPDATE orders SET status = 'recibido', ready_at = NULL, delivered_at = NULL, courier_id = NULL, dispatched_at = NULL, updated_at = ? WHERE id = ?", now, order.id);
+    await q.run("UPDATE orders SET status = 'recibido', ready_at = NULL, delivered_at = NULL, courier_id = NULL, dispatched_at = NULL, updated_at = ? WHERE id = ?", now, order.id);
   } else if (status === 'listo') {
-    q.run(
+    await q.run(
       "UPDATE orders SET status = 'listo', ready_at = CASE WHEN status = 'recibido' THEN ? ELSE COALESCE(ready_at, ?) END, delivered_at = NULL, courier_id = NULL, dispatched_at = NULL, updated_at = ? WHERE id = ?",
       now,
       now,
@@ -430,47 +438,47 @@ export function setStatus(id, status) {
       order.id,
     );
   } else {
-    q.run("UPDATE orders SET status = 'entregado', ready_at = COALESCE(ready_at, ?), delivered_at = ?, updated_at = ? WHERE id = ?", now, now, now, order.id);
+    await q.run("UPDATE orders SET status = 'entregado', ready_at = COALESCE(ready_at, ?), delivered_at = ?, updated_at = ? WHERE id = ?", now, now, now, order.id);
   }
-  return { order: getOrder(order.id), prevStatus: order.status, prevCourierId: order.courier_id };
+  return { order: await getOrder(order.id), prevStatus: order.status, prevCourierId: order.courier_id };
 }
 
-export function payOrder(id, payment, actor = null) {
-  const order = findOrderRow(id);
+export async function payOrder(id, payment, actor = null) {
+  const order = await findOrderRow(id);
   if (order.status === 'cancelado') throw new HttpError(409, 'El pedido está cancelado');
   if (order.paid) throw new HttpError(409, 'Este pedido ya está cobrado');
   const pay = paymentFields(order.total, payment);
   const now = Date.now();
-  q.run('UPDATE orders SET paid = 1, payment_method = ?, amount_received = ?, paid_at = ?, paid_by = ?, updated_at = ? WHERE id = ?', pay.method, pay.received, now, actor?.id ?? null, now, order.id);
+  await q.run('UPDATE orders SET paid = 1, payment_method = ?, amount_received = ?, paid_at = ?, paid_by = ?, updated_at = ? WHERE id = ?', pay.method, pay.received, now, actor?.id ?? null, now, order.id);
   return getOrder(order.id);
 }
 
-export function unpayOrder(id) {
-  const order = findOrderRow(id);
-  q.run('UPDATE orders SET paid = 0, payment_method = NULL, amount_received = NULL, paid_at = NULL, paid_by = NULL, updated_at = ? WHERE id = ?', Date.now(), order.id);
+export async function unpayOrder(id) {
+  const order = await findOrderRow(id);
+  await q.run('UPDATE orders SET paid = 0, payment_method = NULL, amount_received = NULL, paid_at = NULL, paid_by = NULL, updated_at = ? WHERE id = ?', Date.now(), order.id);
   return getOrder(order.id);
 }
 
-export function cancelOrder(id, reason) {
-  const order = findOrderRow(id);
+export async function cancelOrder(id, reason) {
+  const order = await findOrderRow(id);
   if (order.status === 'cancelado') throw new HttpError(409, 'El pedido ya estaba cancelado');
   const now = Date.now();
-  q.run("UPDATE orders SET status = 'cancelado', cancelled_at = ?, cancel_reason = ?, updated_at = ? WHERE id = ?", now, str(reason, 200), now, order.id);
-  return { order: getOrder(order.id), prevStatus: order.status, prevCourierId: order.courier_id };
+  await q.run("UPDATE orders SET status = 'cancelado', cancelled_at = ?, cancel_reason = ?, updated_at = ? WHERE id = ?", now, str(reason, 200), now, order.id);
+  return { order: await getOrder(order.id), prevStatus: order.status, prevCourierId: order.courier_id };
 }
 
 /* ------------------------------------------------------------- domicilios */
 
 /** Asigna (o reasigna) el domicilio a un repartidor: queda "en camino". */
 export function dispatchOrder(id, courierId) {
-  return tx(() => {
-    const order = findOrderRow(id);
+  return tx(async () => {
+    const order = await findOrderRow(id);
     if (order.type !== 'domicilio') throw new HttpError(400, 'Solo los domicilios se despachan con repartidor');
     if (!['listo', 'en_camino', 'recibido'].includes(order.status)) throw new HttpError(409, 'Este pedido ya no se puede despachar');
-    const courier = q.get("SELECT id, name FROM users WHERE id = ? AND role = 'repartidor' AND active = 1", Number(courierId));
+    const courier = await q.get("SELECT id, name FROM users WHERE id = ? AND role = 'repartidor' AND active = 1", Number(courierId));
     if (!courier) throw new HttpError(400, 'Elige un repartidor activo');
     const now = Date.now();
-    q.run(
+    await q.run(
       `UPDATE orders SET status = 'en_camino', courier_id = ?, ready_at = COALESCE(ready_at, ?),
          dispatched_at = CASE WHEN status = 'en_camino' THEN dispatched_at ELSE ? END, updated_at = ?
        WHERE id = ?`,
@@ -480,16 +488,16 @@ export function dispatchOrder(id, courierId) {
       now,
       order.id,
     );
-    return { order: getOrder(order.id), prevStatus: order.status, prevCourierId: order.courier_id };
+    return { order: await getOrder(order.id), prevStatus: order.status, prevCourierId: order.courier_id };
   });
 }
 
 /** El repartidor (o la caja por él) confirma que el domicilio llegó. */
-export function deliverOrder(id, actor) {
-  const order = findOrderRow(id);
+export async function deliverOrder(id, actor) {
+  const order = await findOrderRow(id);
   if (order.status !== 'en_camino') throw new HttpError(409, order.status === 'entregado' ? 'Este domicilio ya estaba entregado' : 'Este domicilio no está en camino');
   if (actor.role === 'repartidor' && order.courier_id !== actor.id) throw new HttpError(403, 'Este domicilio está asignado a otro repartidor');
   const now = Date.now();
-  q.run("UPDATE orders SET status = 'entregado', delivered_at = ?, updated_at = ? WHERE id = ?", now, now, order.id);
-  return { order: getOrder(order.id), prevStatus: order.status, prevCourierId: order.courier_id };
+  await q.run("UPDATE orders SET status = 'entregado', delivered_at = ?, updated_at = ? WHERE id = ?", now, now, order.id);
+  return { order: await getOrder(order.id), prevStatus: order.status, prevCourierId: order.courier_id };
 }

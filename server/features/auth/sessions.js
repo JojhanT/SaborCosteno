@@ -67,12 +67,12 @@ export function browserName(ua = '') {
   return os ? `${br} · ${os}` : br;
 }
 
-export function createSession(res, req, user, device) {
+export async function createSession(res, req, user, device) {
   const token = crypto.randomBytes(32).toString('base64url');
   const now = Date.now();
   const id = crypto.randomUUID();
   const ua = String(req.get('user-agent') ?? '').slice(0, 200);
-  q.run(
+  await q.run(
     `INSERT INTO sessions (id, token_hash, user_id, device, user_agent, ip, created_at, last_seen, expires_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
@@ -100,78 +100,80 @@ function split(row) {
 }
 
 /** Revisa que la sesión siga viva y la renueva si se está usando. */
-function validRow(row, ip) {
+async function validRow(row, ip) {
   if (!row || row.revoked) return null;
   const now = Date.now();
   if (!row.active || row.expires_at <= now) {
-    q.run('UPDATE sessions SET revoked = 1 WHERE id = ?', row.id);
+    await q.run('UPDATE sessions SET revoked = 1 WHERE id = ?', row.id);
     return null;
   }
   if (now - row.last_seen > TOUCH_EVERY) {
     const expires = expiryFor(row.role, row.created_at, now);
-    if (ip) q.run('UPDATE sessions SET last_seen = ?, expires_at = ?, ip = ? WHERE id = ?', now, expires, ip, row.id);
-    else q.run('UPDATE sessions SET last_seen = ?, expires_at = ? WHERE id = ?', now, expires, row.id);
+    if (ip) await q.run('UPDATE sessions SET last_seen = ?, expires_at = ?, ip = ? WHERE id = ?', now, expires, ip, row.id);
+    else await q.run('UPDATE sessions SET last_seen = ?, expires_at = ? WHERE id = ?', now, expires, row.id);
     row.last_seen = now;
     row.expires_at = expires;
   }
   return split(row);
 }
 
-export function sessionFromReq(req) {
+export async function sessionFromReq(req) {
   const token = parseCookies(req.headers.cookie)[COOKIE];
   if (!token || token.length > 100) return null;
-  return validRow(q.get(`${SESSION_SQL} WHERE s.token_hash = ? AND s.revoked = 0`, hashToken(token)), clientIp(req));
+  return validRow(await q.get(`${SESSION_SQL} WHERE s.token_hash = ? AND s.revoked = 0`, hashToken(token)), clientIp(req));
 }
 
 /** Para las conexiones en vivo: devuelve el usuario vigente o null. */
-export function validateSessionId(id) {
-  return validRow(q.get(`${SESSION_SQL} WHERE s.id = ? AND s.revoked = 0`, id), null)?.user ?? null;
+export async function validateSessionId(id) {
+  return (await validRow(await q.get(`${SESSION_SQL} WHERE s.id = ? AND s.revoked = 0`, id), null))?.user ?? null;
 }
 
-export function revokeSessions(ids) {
+export async function revokeSessions(ids) {
   if (!ids.length) return;
-  q.run(`UPDATE sessions SET revoked = 1 WHERE id IN (${placeholders(ids)})`, ...ids);
+  await q.run(`UPDATE sessions SET revoked = 1 WHERE id IN (${placeholders(ids)})`, ...ids);
   closeSessions(ids);
 }
 
 /** Cierra todas las sesiones de un usuario (menos, opcionalmente, la actual). */
-export function revokeUserSessions(userId, exceptId = null) {
-  const ids = q.all('SELECT id FROM sessions WHERE user_id = ? AND revoked = 0 AND id != ?', userId, exceptId ?? '').map((r) => r.id);
-  revokeSessions(ids);
+export async function revokeUserSessions(userId, exceptId = null) {
+  const ids = (await q.all('SELECT id FROM sessions WHERE user_id = ? AND revoked = 0 AND id != ?', userId, exceptId ?? '')).map((r) => r.id);
+  await revokeSessions(ids);
   return ids.length;
 }
 
-export function revokeAllSessions() {
-  const ids = q.all('SELECT id FROM sessions WHERE revoked = 0').map((r) => r.id);
-  revokeSessions(ids);
+export async function revokeAllSessions() {
+  const ids = (await q.all('SELECT id FROM sessions WHERE revoked = 0')).map((r) => r.id);
+  await revokeSessions(ids);
 }
 
-export function activeSessions() {
+export async function activeSessions() {
   const now = Date.now();
-  return q
-    .all(
+  return (
+    await q.all(
       `SELECT s.id, s.user_id, s.device, s.user_agent, s.ip, s.created_at, s.last_seen, s.expires_at, u.name, u.username, u.role
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.revoked = 0 AND s.expires_at > ? AND u.active = 1
         ORDER BY s.last_seen DESC`,
       now,
     )
-    .map((s) => ({
-      id: s.id,
-      userId: s.user_id,
-      userName: s.name,
-      username: s.username,
-      role: s.role,
-      device: s.device,
-      browser: browserName(s.user_agent),
-      ip: s.ip,
-      createdAt: s.created_at,
-      lastSeen: s.last_seen,
-      expiresAt: s.expires_at,
-    }));
+  ).map((s) => ({
+    id: s.id,
+    userId: s.user_id,
+    userName: s.name,
+    username: s.username,
+    role: s.role,
+    device: s.device,
+    browser: browserName(s.user_agent),
+    ip: s.ip,
+    createdAt: s.created_at,
+    lastSeen: s.last_seen,
+    expiresAt: s.expires_at,
+  }));
 }
 
 // limpieza: las sesiones cerradas o vencidas hace más de 30 días se borran
 setInterval(() => {
-  q.run('DELETE FROM sessions WHERE (revoked = 1 OR expires_at < ?) AND last_seen < ?', Date.now(), Date.now() - 30 * DAY);
+  q.run('DELETE FROM sessions WHERE (revoked = 1 OR expires_at < ?) AND last_seen < ?', Date.now(), Date.now() - 30 * DAY).catch((err) =>
+    console.error('No se pudo limpiar sesiones viejas:', err),
+  );
 }, 6 * 3600_000).unref();
