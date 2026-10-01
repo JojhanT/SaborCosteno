@@ -34,7 +34,7 @@ export function onStreamConnect(fn) {
   hooks.onConnect.push(fn);
 }
 
-export function streamHandler(req, res) {
+export async function streamHandler(req, res) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -47,7 +47,7 @@ export function streamHandler(req, res) {
   write(res, 'retry: 2000\n\n');
   write(res, frame('hello', { build: buildId() }));
   for (const fn of hooks.onConnect) {
-    const chunk = fn(client);
+    const chunk = await fn(client);
     if (chunk) write(res, chunk);
   }
   clients.set(res, client);

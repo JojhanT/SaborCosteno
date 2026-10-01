@@ -34,13 +34,18 @@ function snapshot(user, orders, turn, event) {
   return { orders: visibleOrders(user, orders), nextTurn: turn, serverTime: Date.now(), event: eventFor(user, event) };
 }
 
-onStreamConnect((client) => frame('orders', snapshot(client.user, activeOrders(), nextTurn(), null)));
+onStreamConnect(async (client) => frame('orders', snapshot(client.user, await activeOrders(), await nextTurn(), null)));
 
 /**
  * @param {string} kind  created | updated | status | paid | unpaid | cancelled | call | dispatched
  * @param {{ by?: {id:number,name:string,role:string}|null, prevStatus?: string, prevCourierId?: number|null, itemsChanged?: boolean, backToKitchen?: boolean }} extra
  */
+/** No se espera desde las rutas (es un efecto secundario): si falla, no debe tumbar la petición. */
 export function emitOrders(kind, order, extra = {}) {
+  emitOrdersAsync(kind, order, extra).catch((err) => console.error('No se pudo avisar el cambio del pedido:', err));
+}
+
+async function emitOrdersAsync(kind, order, extra = {}) {
   const event = {
     id: crypto.randomUUID(),
     kind,
@@ -60,8 +65,7 @@ export function emitOrders(kind, order, extra = {}) {
     prevCourierId: extra.prevCourierId ?? null,
     by: extra.by ?? null,
   };
-  const all = activeOrders();
-  const turn = nextTurn();
+  const [all, turn] = await Promise.all([activeOrders(), nextTurn()]);
   broadcastEach(
     'orders',
     (c) => groupOf(c.user),
