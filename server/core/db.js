@@ -184,7 +184,24 @@ const MIGRATIONS = [
   `,
 ];
 
+/** Espera a que MySQL acepte conexiones: al arrancar junto al contenedor, el healthcheck
+ * a veces lo da por listo un poco antes de que ya reciba conexiones nuevas. */
+async function waitForDb(retries = 20, delayMs = 2000) {
+  for (let i = 1; i <= retries; i++) {
+    try {
+      const connection = await pool.getConnection();
+      connection.release();
+      return;
+    } catch (err) {
+      if (i === retries) throw err;
+      console.log(`  … esperando a MySQL (intento ${i}/${retries})`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 async function migrate() {
+  await waitForDb();
   const connection = await pool.getConnection();
   try {
     await connection.query(`
