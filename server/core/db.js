@@ -10,16 +10,18 @@ export const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-export const pool = mysql.createPool({
+const DB_CONFIG = {
   host: process.env.DB_HOST || 'localhost',
   port: Number(process.env.DB_PORT) || 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'sabor',
+};
+
+export const pool = mysql.createPool({
+  ...DB_CONFIG,
   waitForConnections: true,
   connectionLimit: 10,
-  // las migraciones corren varias sentencias separadas por ";" en una sola llamada
-  multipleStatements: true,
 });
 
 /**
@@ -202,7 +204,9 @@ async function waitForDb(retries = 20, delayMs = 2000) {
 
 async function migrate() {
   await waitForDb();
-  const connection = await pool.getConnection();
+  // conexión aparte y de un solo uso: solo las migraciones mandan varias sentencias
+  // juntas, así ninguna consulta de la app puede encadenar sentencias
+  const connection = await mysql.createConnection({ ...DB_CONFIG, multipleStatements: true });
   try {
     await connection.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -217,7 +221,7 @@ async function migrate() {
       console.log(`  ✓ Migración ${v + 1} aplicada`);
     }
   } finally {
-    connection.release();
+    await connection.end();
   }
 }
 

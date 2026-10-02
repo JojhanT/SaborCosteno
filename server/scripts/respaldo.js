@@ -18,15 +18,20 @@ const pad = (n) => String(n).padStart(2, '0');
 const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
 const file = path.join(DIR, `sabor-${stamp}.sql`);
 
-const { stdout } = await run('mysqldump', [
-  `--host=${process.env.DB_HOST || 'localhost'}`,
-  `--port=${process.env.DB_PORT || 3306}`,
-  `--user=${process.env.DB_USER || 'root'}`,
-  `--password=${process.env.DB_PASSWORD || ''}`,
-  '--single-transaction',
-  '--routines',
-  process.env.DB_NAME || 'sabor',
-], { maxBuffer: 1024 * 1024 * 1024 });
+// la clave va por el entorno (MYSQL_PWD) y no como argumento: así no queda a la
+// vista de quien liste los procesos del servidor
+const { stdout } = await run(
+  'mysqldump',
+  [
+    `--host=${process.env.DB_HOST || 'localhost'}`,
+    `--port=${process.env.DB_PORT || 3306}`,
+    `--user=${process.env.DB_USER || 'root'}`,
+    '--single-transaction',
+    '--routines',
+    process.env.DB_NAME || 'sabor',
+  ],
+  { maxBuffer: 1024 * 1024 * 1024, env: { ...process.env, MYSQL_PWD: process.env.DB_PASSWORD || '' } },
+);
 fs.writeFileSync(file, stdout);
 await pool.end();
 console.log(`  ✓ Copia de seguridad: ${path.relative(DATA_DIR, file)}`);
