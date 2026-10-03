@@ -13,14 +13,17 @@ Caja, cocina y repartidores conectados en tiempo real por la red del local. Cada
 
 ## Cómo arrancarlo
 
-1. Instala **Node.js 22 o superior** desde <https://nodejs.org> (una sola vez).
-2. Haz doble clic en **`iniciar.bat`**.
-   La primera vez instala y prepara todo (tarda un par de minutos). Después abre el navegador en la caja.
-3. Deja esa ventana negra abierta mientras el local esté funcionando. Si la cierras, se apaga el sistema.
-4. **La primera vez**, en ese mismo computador aparece *Protejamos el sistema*: crea la **cuenta del administrador** (nombre, usuario y contraseña).
-5. Entra a **Menú y ajustes → Usuarios** y crea una cuenta para cada persona: cajeros, cocineros y repartidores.
+El sistema corre en un servidor con Docker (ver [DESPLIEGUE.md](DESPLIEGUE.md)):
 
-La consola muestra la dirección de red, por ejemplo `http://192.168.1.57:3000`. En los TV, tablets o celulares que estén en el **mismo wifi** abre:
+```bash
+docker compose up -d --build
+```
+
+1. **La primera vez** aparece *Protejamos el sistema*: crea la **cuenta del administrador** con el código de instalación que muestra `docker compose logs app`.
+2. Entra a **Menú y ajustes** y carga tu menú: categorías, productos, salsas y adiciones. El sistema arranca con el menú en blanco.
+3. En **Usuarios**, crea una cuenta para cada persona: meseros, cajeros, cocineros y repartidores.
+
+En los TV, tablets o celulares abre:
 
 - Cocina: `http://192.168.1.57:3000/cocina`
 - Repartidores: `http://192.168.1.57:3000/reparto`
@@ -59,7 +62,7 @@ El servidor revisa cada permiso: aunque alguien escriba la dirección de otra pa
 - **Equipos con sesión abierta**: en Usuarios se ve cada equipo conectado (quién, navegador, IP, última actividad) y se puede **desconectar** cualquiera, por ejemplo un celular desconocido.
 - **Intentos fallidos**: tras 5 contraseñas incorrectas, ese equipo se bloquea 5 minutos (y sube hasta 1 hora). Un mismo usuario que falla 10 veces desde cualquier lado se bloquea 15 minutos. La consola del servidor registra los ingresos y los intentos fallidos.
 - La cuenta del administrador se crea **desde el computador donde está instalado el sistema** o, desde otro equipo, escribiendo el **código de instalación** que aparece en la ventana del servidor (en Docker: `docker compose logs app`). Así nadie en el wifi o en internet se adelanta.
-- **¿Se te olvidó la contraseña del administrador?** En el computador de la caja ejecuta **`restablecer-claves.bat`** (en Docker: `docker compose exec -u node app npm run -s reset-claves`). Desconecta todos los equipos, muestra un código nuevo y abre la pantalla para crear un administrador nuevo o ponerle contraseña nueva a uno existente (escribe su mismo usuario): en ese computador directamente, o desde otro en `/recuperar` con el código. **No** borra pedidos, menú, fotos ni los demás usuarios.
+- **¿Se te olvidó la contraseña del administrador?** En el servidor ejecuta `docker compose exec -u node app npm run -s reset-claves`. Desconecta todos los equipos, muestra un código nuevo y abre la pantalla para crear un administrador nuevo o ponerle contraseña nueva a uno existente (escribe su mismo usuario): en ese computador directamente, o desde otro en `/recuperar` con el código. **No** borra pedidos, menú, fotos ni los demás usuarios.
 - Recomendado: deja a los clientes en la **red de invitados** del router, separada de la red de la caja, los TV y los celulares del personal.
 
 ## El flujo del día a día

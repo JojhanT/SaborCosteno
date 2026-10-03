@@ -5,7 +5,6 @@ import path from 'node:path';
 import { pool, ROOT, UPLOADS_DIR, DATA_DIR } from './core/db.js';
 import { lanUrls, PORT, PUBLIC_URL, trustProxy } from './core/net.js';
 import { securityHeaders } from './core/security.js';
-import { seedIfEmpty } from './features/catalog/seed.js';
 import { setupRequired } from './features/auth/auth.routes.js';
 import { issueSetupCode } from './features/auth/setup-code.js';
 import { getSettings } from './features/settings/settings.service.js';
@@ -14,8 +13,6 @@ import { api } from './api.js';
 const dev = process.argv.includes('--dev');
 const CLIENT_DIR = path.join(ROOT, 'client');
 const DIST_DIR = path.join(CLIENT_DIR, 'dist');
-
-if (await seedIfEmpty()) console.log('  ✓ Menú de ejemplo cargado (puedes editarlo en /admin)');
 
 const app = express();
 const server = http.createServer(app);

@@ -13,7 +13,7 @@ import { checkSetupCode, clearSetupCode, issueSetupCode } from './setup-code.js'
 const RECOVERY_KEY = 'auth_recovery';
 
 /**
- * Lo activa `restablecer-claves.bat` (o `npm run reset-claves`): permite crear o recuperar
+ * Lo activa `npm run reset-claves`: permite crear o recuperar
  * el administrador desde el PC del sistema, o desde otro equipo con el código que devuelve.
  */
 export function startRecovery() {
