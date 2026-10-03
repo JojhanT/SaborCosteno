@@ -244,7 +244,6 @@ export default function Carta() {
             </a>
           )}
         </div>
-        <p className="carta-nota">Los precios pueden cambiar sin previo aviso.</p>
       </footer>
     </div>
   );

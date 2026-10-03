@@ -291,11 +291,6 @@
   flex: none;
   color: var(--orange);
 }
-.carta-nota {
-  margin: 22px 0 0;
-  font-size: 11.5px;
-  color: var(--faint);
-}
 .carta-vacia {
   text-align: center;
   color: var(--muted);
@@ -393,8 +388,7 @@
   .carta-datos a {
     color: #444;
   }
-  .carta-ingr,
-  .carta-nota {
+  .carta-ingr {
     color: #777;
   }
   .carta-adiciones b {
