@@ -26,6 +26,11 @@ async function pintar(canvas: HTMLCanvasElement, url: string, lado: number) {
     errorCorrectionLevel: 'H',
     color: { dark: TINTA, light: FONDO },
   });
+  // la librería deja style.width y style.height en línea con el tamaño en píxeles, y
+  // eso le gana a la hoja de estilos: sin borrarlos el código se sale de la pantalla
+  canvas.style.width = '';
+  canvas.style.height = '';
+
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 

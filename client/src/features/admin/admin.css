@@ -849,6 +849,9 @@
 }
 .qr-mini canvas {
   display: block;
+  width: min(100%, 220px);
+  height: auto;
+  aspect-ratio: 1;
   border-radius: 6px;
 }
 .qr-mini span {
