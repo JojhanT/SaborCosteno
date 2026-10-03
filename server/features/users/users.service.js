@@ -53,7 +53,7 @@ export async function listUsers() {
        FROM users u
        LEFT JOIN sessions s ON s.user_id = u.id AND s.revoked = 0 AND s.expires_at > ?
       GROUP BY u.id
-      ORDER BY u.active DESC, CASE u.role WHEN 'admin' THEN 0 WHEN 'cajero' THEN 1 WHEN 'cocinero' THEN 2 ELSE 3 END, u.name`,
+      ORDER BY u.active DESC, CASE u.role WHEN 'admin' THEN 0 WHEN 'mesero' THEN 1 WHEN 'cajero' THEN 2 WHEN 'cocinero' THEN 3 ELSE 4 END, u.name`,
     Date.now(),
   );
   return rows.map((r) => serializeUser(r, online));

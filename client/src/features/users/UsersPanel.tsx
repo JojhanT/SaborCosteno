@@ -13,6 +13,7 @@ import './users.css';
 const FILTERS: { key: Role | 'all'; label: string }[] = [
   { key: 'all', label: 'Todos' },
   { key: 'admin', label: 'Administradores' },
+  { key: 'mesero', label: 'Meseros' },
   { key: 'cajero', label: 'Cajeros' },
   { key: 'cocinero', label: 'Cocineros' },
   { key: 'repartidor', label: 'Repartidores' },
@@ -184,7 +185,7 @@ export function UsersPanel() {
           <button className="ucard ucard-new" onClick={() => setEditing('new')}>
             <Plus />
             <b>Nuevo usuario</b>
-            <small>Cajero, cocinero, repartidor o administrador</small>
+            <small>Mesero, cajero, cocinero, repartidor o administrador</small>
           </button>
         </div>
       )}
