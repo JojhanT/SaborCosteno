@@ -8,7 +8,7 @@ import { ROLE_INFO, ROLE_LABEL } from '../../shared/lib/session';
 import { usersApi, type StaffUser, type UserForm } from './api';
 import type { Role } from '../../shared/types';
 
-const ROLES: Role[] = ['cajero', 'cocinero', 'repartidor', 'admin'];
+const ROLES: Role[] = ['mesero', 'cajero', 'cocinero', 'repartidor', 'admin'];
 
 const cleanUsername = (v: string) =>
   v
@@ -24,7 +24,7 @@ const suggest = (name: string) => cleanUsername(name.trim().split(/\s+/)[0] ?? '
 
 export function UserEditor({ user, isSelf, onClose, onSaved }: { user: StaffUser | 'new'; isSelf: boolean; onClose: () => void; onSaved: () => void }) {
   const isNew = user === 'new';
-  const [f, setF] = useState<UserForm>(isNew ? { name: '', username: '', role: 'cajero', phone: '', active: true } : { name: user.name, username: user.username, role: user.role, phone: user.phone, active: user.active });
+  const [f, setF] = useState<UserForm>(isNew ? { name: '', username: '', role: 'mesero', phone: '', active: true } : { name: user.name, username: user.username, role: user.role, phone: user.phone, active: user.active });
   const [touchedUsername, setTouchedUsername] = useState(!isNew);
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
@@ -118,7 +118,7 @@ export function UserEditor({ user, isSelf, onClose, onSaved }: { user: StaffUser
           </div>
 
           <label className="field">
-            <span>Celular {f.role === 'repartidor' ? '(para que la caja lo llame)' : '(opcional)'}</span>
+            <span>Celular {f.role === 'repartidor' ? '(para llamarlo cuando salga un domicilio)' : '(opcional)'}</span>
             <input className="input" inputMode="tel" value={f.phone} maxLength={30} placeholder="300 000 0000" onChange={(e) => set({ phone: e.target.value })} />
           </label>
 

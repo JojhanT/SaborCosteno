@@ -1,5 +1,6 @@
 import { q, tx, json, placeholders } from '../../core/db.js';
 import { HttpError } from '../../core/http-error.js';
+import { can, canCloseDelivery } from '../auth/permissions.js';
 import { getSettings, businessDay } from '../settings/settings.service.js';
 
 export const ORDER_TYPES = ['mesa', 'llevar', 'domicilio'];
@@ -13,6 +14,26 @@ const money = (v) => {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 };
 const uniqStrings = (list) => [...new Set((Array.isArray(list) ? list : []).map((v) => str(v, 60)).filter(Boolean))];
+
+/* ------------------------------------------------------------- bitácora */
+
+/**
+ * Quién hizo qué y cuándo. Queda todo, incluso lo que se deshace (un cobro anulado
+ * no borra el rastro de quién había cobrado), que es lo que sirve en un descuadre.
+ */
+function logEvent(orderId, kind, actor, detail = null) {
+  return q.run('INSERT INTO order_events (order_id, kind, user_id, at, detail) VALUES (?, ?, ?, ?, ?)', orderId, kind, actor?.id ?? null, Date.now(), detail ? json.str(detail) : null);
+}
+
+export async function orderEvents(id) {
+  const rows = await q.all(
+    `SELECT e.id, e.kind, e.at, e.detail, e.user_id, u.name, u.role
+       FROM order_events e LEFT JOIN users u ON u.id = e.user_id
+      WHERE e.order_id = ? ORDER BY e.id`,
+    Number(id),
+  );
+  return rows.map((r) => ({ id: r.id, kind: r.kind, at: r.at, detail: json.parse(r.detail, null), byId: r.user_id, byName: r.name ?? '', byRole: r.role ?? null }));
+}
 
 /* ---------------------------------------------------------------- lectura */
 
@@ -305,6 +326,8 @@ function paymentFields(total, payment) {
 export async function createOrder(body, actor = null) {
   const settings = await getSettings();
   const now = Date.now();
+  // quien toma pedidos no cobra: el cobro es un paso aparte en la caja
+  if (body?.payment && !can(actor, 'orders.charge')) throw new HttpError(403, 'Tu usuario no cobra: envía el pedido y la caja lo cobra');
   const info = orderInfo(body ?? {}, settings);
   return tx(async () => {
     const built = await buildItems(body.items);
@@ -341,11 +364,13 @@ export async function createOrder(body, actor = null) {
     );
     const id = Number(lastInsertRowid);
     for (const b of built) await insertItem(id, b.row, now);
+    await logEvent(id, 'creado', actor, { turno: turn, tipo: info.type, total });
+    if (pay) await logEvent(id, 'cobrado', actor, { metodo: pay.method, total, recibido: pay.received });
     return getOrder(id);
   });
 }
 
-export async function updateOrder(id, body) {
+export async function updateOrder(id, body, actor = null) {
   const settings = await getSettings();
   const now = Date.now();
   return tx(async () => {
@@ -408,6 +433,7 @@ export async function updateOrder(id, body) {
       dropCourier ? 1 : 0,
       order.id,
     );
+    await logEvent(order.id, 'editado', actor, { total, cambiaronProductos: itemsChanged, volvioACocina: backToKitchen });
     return { order: await getOrder(order.id), itemsChanged, backToKitchen, prevCourierId: order.courier_id };
   });
 }
@@ -422,10 +448,15 @@ export async function findOrderRow(id) {
  * recibido → vuelve a cocina · listo → sale de cocina · entregado → cerrado.
  * Volver a cocina o a "listo" le quita el repartidor a un domicilio en camino.
  */
-export async function setStatus(id, status) {
+export async function setStatus(id, status, actor = null) {
   if (!FLOW_STATUSES.includes(status)) throw new HttpError(400, 'Estado no válido');
   const order = await findOrderRow(id);
   if (order.status === 'cancelado') throw new HttpError(409, 'El pedido está cancelado');
+  // un domicilio que ya salió con repartidor solo lo cierra él (este es el otro camino
+  // a "entregado", aparte de deliverOrder: sin esto se podría cerrar el ajeno por aquí)
+  if (status === 'entregado' && order.status === 'en_camino' && !canCloseDelivery(actor, order)) {
+    throw new HttpError(403, 'Este domicilio lo cierra el repartidor que lo lleva');
+  }
   const now = Date.now();
   if (status === 'recibido') {
     await q.run("UPDATE orders SET status = 'recibido', ready_at = NULL, delivered_at = NULL, courier_id = NULL, dispatched_at = NULL, updated_at = ? WHERE id = ?", now, order.id);
@@ -440,6 +471,8 @@ export async function setStatus(id, status) {
   } else {
     await q.run("UPDATE orders SET status = 'entregado', ready_at = COALESCE(ready_at, ?), delivered_at = ?, updated_at = ? WHERE id = ?", now, now, now, order.id);
   }
+  const kind = status === 'recibido' ? 'devuelto_cocina' : status === 'listo' ? 'listo' : 'entregado';
+  await logEvent(order.id, kind, actor, { desde: order.status });
   return { order: await getOrder(order.id), prevStatus: order.status, prevCourierId: order.courier_id };
 }
 
@@ -450,27 +483,30 @@ export async function payOrder(id, payment, actor = null) {
   const pay = paymentFields(order.total, payment);
   const now = Date.now();
   await q.run('UPDATE orders SET paid = 1, payment_method = ?, amount_received = ?, paid_at = ?, paid_by = ?, updated_at = ? WHERE id = ?', pay.method, pay.received, now, actor?.id ?? null, now, order.id);
+  await logEvent(order.id, 'cobrado', actor, { metodo: pay.method, total: order.total, recibido: pay.received });
   return getOrder(order.id);
 }
 
-export async function unpayOrder(id) {
+export async function unpayOrder(id, actor = null) {
   const order = await findOrderRow(id);
   await q.run('UPDATE orders SET paid = 0, payment_method = NULL, amount_received = NULL, paid_at = NULL, paid_by = NULL, updated_at = ? WHERE id = ?', Date.now(), order.id);
+  await logEvent(order.id, 'cobro_anulado', actor, { metodo: order.payment_method, total: order.total });
   return getOrder(order.id);
 }
 
-export async function cancelOrder(id, reason) {
+export async function cancelOrder(id, reason, actor = null) {
   const order = await findOrderRow(id);
   if (order.status === 'cancelado') throw new HttpError(409, 'El pedido ya estaba cancelado');
   const now = Date.now();
   await q.run("UPDATE orders SET status = 'cancelado', cancelled_at = ?, cancel_reason = ?, updated_at = ? WHERE id = ?", now, str(reason, 200), now, order.id);
+  await logEvent(order.id, 'cancelado', actor, { desde: order.status, motivo: str(reason, 200), estabaPagado: !!order.paid });
   return { order: await getOrder(order.id), prevStatus: order.status, prevCourierId: order.courier_id };
 }
 
 /* ------------------------------------------------------------- domicilios */
 
 /** Asigna (o reasigna) el domicilio a un repartidor: queda "en camino". */
-export function dispatchOrder(id, courierId) {
+export function dispatchOrder(id, courierId, actor = null) {
   return tx(async () => {
     const order = await findOrderRow(id);
     if (order.type !== 'domicilio') throw new HttpError(400, 'Solo los domicilios se despachan con repartidor');
@@ -488,16 +524,18 @@ export function dispatchOrder(id, courierId) {
       now,
       order.id,
     );
+    await logEvent(order.id, 'despachado', actor, { repartidor: courier.name, repartidorId: courier.id, reasignado: order.status === 'en_camino', desde: order.status });
     return { order: await getOrder(order.id), prevStatus: order.status, prevCourierId: order.courier_id };
   });
 }
 
-/** El repartidor (o la caja por él) confirma que el domicilio llegó. */
+/** Solo lo cierra el repartidor que lo lleva; el admin, únicamente para destrabarlo. */
 export async function deliverOrder(id, actor) {
   const order = await findOrderRow(id);
   if (order.status !== 'en_camino') throw new HttpError(409, order.status === 'entregado' ? 'Este domicilio ya estaba entregado' : 'Este domicilio no está en camino');
-  if (actor.role === 'repartidor' && order.courier_id !== actor.id) throw new HttpError(403, 'Este domicilio está asignado a otro repartidor');
+  if (!canCloseDelivery(actor, order)) throw new HttpError(403, 'Este domicilio lo cierra el repartidor que lo lleva');
   const now = Date.now();
   await q.run("UPDATE orders SET status = 'entregado', delivered_at = ?, updated_at = ? WHERE id = ?", now, now, order.id);
+  await logEvent(order.id, 'entregado', actor, { desde: order.status, porElAdmin: actor?.role === 'admin' && order.courier_id !== actor.id });
   return { order: await getOrder(order.id), prevStatus: order.status, prevCourierId: order.courier_id };
 }

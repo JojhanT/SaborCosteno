@@ -6,6 +6,7 @@ export type { Role };
 /** Permisos que manda el servidor en /auth/me (la lista vive en server/features/auth/permissions.js). */
 export type Permission =
   | 'orders.manage'
+  | 'orders.charge'
   | 'orders.kitchen'
   | 'orders.dispatch'
   | 'orders.deliver'
@@ -124,12 +125,13 @@ export async function changePassword(current: string, next: string) {
   return r.closedSessions;
 }
 
-export const ROLE_LABEL: Record<Role, string> = { admin: 'Administrador', cajero: 'Cajero', cocinero: 'Cocinero', repartidor: 'Repartidor' };
+export const ROLE_LABEL: Record<Role, string> = { admin: 'Administrador', mesero: 'Mesero', cajero: 'Cajero', cocinero: 'Cocinero', repartidor: 'Repartidor' };
 
 /** Ilustración, color y descripción de cada rol (login, inicio y usuarios). */
 export const ROLE_INFO: Record<Role, { art: string; tone: string; text: string }> = {
   admin: { art: 'menu', tone: 'terra', text: 'Todo: menú, precios, ajustes y usuarios' },
-  cajero: { art: 'caja', tone: 'orange', text: 'Caja, pedidos y contabilidad' },
+  mesero: { art: 'llevar', tone: 'orange', text: 'Toma los pedidos y los entrega. No cobra' },
+  cajero: { art: 'caja', tone: 'gold', text: 'Cobra y lleva la contabilidad. No toma pedidos' },
   cocinero: { art: 'cocina', tone: 'gold', text: 'Cocina: ve los pedidos y los marca listos' },
   repartidor: { art: 'domicilio', tone: 'sea', text: 'Sus domicilios: los ve y los marca entregados' },
 };

@@ -20,11 +20,11 @@ deliveryRouter.post('/orders/:id/dispatch', requirePermission('orders.dispatch')
   const id = idParam(req);
   const courierId = req.body?.courierId;
   if (courierId == null) {
-    const { order, prevStatus, prevCourierId } = await setStatus(id, 'entregado');
+    const { order, prevStatus, prevCourierId } = await setStatus(id, 'entregado', req.user);
     emitOrders('status', order, { prevStatus, prevCourierId, by: actorOf(req) });
     return res.json(order);
   }
-  const { order, prevStatus, prevCourierId } = await dispatchOrder(id, courierId);
+  const { order, prevStatus, prevCourierId } = await dispatchOrder(id, courierId, req.user);
   emitOrders('dispatched', order, { prevStatus, prevCourierId, by: actorOf(req) });
   res.json(order);
 });

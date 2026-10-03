@@ -1,14 +1,30 @@
-import { useEffect, useState, type CSSProperties } from 'react';
-import { Ban, Bike, Check, ChefHat, Megaphone, MapPin, Pencil, Phone, Repeat, RotateCcw, StickyNote, Truck, Undo2, User, UserCheck, Wallet } from 'lucide-react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { Ban, Bike, Check, ChefHat, History, Megaphone, MapPin, Pencil, Phone, Repeat, RotateCcw, StickyNote, Truck, Undo2, User, UserCheck, Wallet } from 'lucide-react';
 import { Art } from '../../shared/components/Art';
 import { Modal, ModalClose, Visual } from '../../shared/components/ui';
 import { ItemMods } from '../../shared/components/ItemMods';
+import { api } from '../../shared/lib/api';
 import { useLive } from '../../shared/lib/live';
+import { can, ROLE_LABEL, useMe } from '../../shared/lib/session';
 import { METHOD_LABEL, STATUS_LABEL, TYPE_ART, clock, minutesText, money, orderPlace } from '../../shared/lib/format';
 import { markDelivered } from '../delivery/api';
+import { canCloseDelivery, type BoardPerms } from './Board';
 import { callTurn, cancelOrder, changeStatus, unpayOrder } from './actions';
-import type { Order } from '../../shared/types';
+import type { Order, OrderEvent } from '../../shared/types';
 import './orders.css';
+
+/** Cómo se lee cada línea de la bitácora. */
+const EVENT_LABEL: Record<OrderEvent['kind'], string> = {
+  creado: 'Tomó el pedido',
+  editado: 'Editó el pedido',
+  listo: 'Lo marcó listo',
+  devuelto_cocina: 'Lo devolvió a cocina',
+  despachado: 'Lo despachó',
+  entregado: 'Lo entregó',
+  cobrado: 'Cobró',
+  cobro_anulado: 'Anuló el cobro',
+  cancelado: 'Canceló el pedido',
+};
 
 interface Props {
   order: Order | null;
@@ -31,6 +47,7 @@ const STATUS_CHIP: Record<Order['status'], string> = { recibido: 'orange', listo
 function DetailBody({ initial, onClose, onPay, onEdit, onDispatch }: Omit<Props, 'order'> & { initial: Order }) {
   const { orders } = useLive();
   const [local, setLocal] = useState(initial);
+  const [events, setEvents] = useState<OrderEvent[] | null>(null);
   const live = orders.find((o) => o.id === initial.id);
   useEffect(() => {
     if (live && live.updatedAt >= local.updatedAt) setLocal(live);
@@ -39,12 +56,40 @@ function DetailBody({ initial, onClose, onPay, onEdit, onDispatch }: Omit<Props,
   const apply = (u: Order | null) => u && setLocal(u);
   const delivery = o.type === 'domicilio';
 
+  const me = useMe();
+  const perms = useMemo<BoardPerms>(
+    () => ({
+      manage: can(me, 'orders.manage'),
+      charge: can(me, 'orders.charge'),
+      kitchen: can(me, 'orders.kitchen'),
+      dispatch: can(me, 'orders.dispatch'),
+      userId: me?.user?.id ?? null,
+      isAdmin: me?.user?.role === 'admin',
+    }),
+    [me],
+  );
+
+  // la bitácora solo se pide al abrir el detalle, no en el tablero
+  useEffect(() => {
+    let alive = true;
+    api
+      .get<{ events: OrderEvent[] }>(`/orders/${o.id}/events`)
+      .then((r) => alive && setEvents(r.events))
+      .catch(() => alive && setEvents([]));
+    return () => {
+      alive = false;
+    };
+  }, [o.id, o.updatedAt]);
+
+  /** Quién hizo ese paso, según la bitácora (la última vez que pasó). */
+  const lastBy = (kind: OrderEvent['kind']) => [...(events ?? [])].reverse().find((e) => e.kind === kind)?.byName ?? '';
+
   const steps = [
-    { label: 'Recibido', at: o.createdAt, icon: <ChefHat /> },
-    { label: 'Listo', at: o.readyAt, icon: <Check /> },
-    ...(delivery ? [{ label: o.courierName ? `Salió con ${o.courierName.split(' ')[0]}` : 'Despachado', at: o.dispatchedAt, icon: <Bike /> }] : []),
-    { label: 'Entregado', at: o.deliveredAt, icon: delivery ? <Truck /> : <Check /> },
-    { label: o.paid ? `Cobrado · ${METHOD_LABEL[o.paymentMethod!] ?? ''}` : 'Sin cobrar', at: o.paidAt, icon: <Wallet /> },
+    { label: 'Recibido', at: o.createdAt, icon: <ChefHat />, by: o.createdByName || lastBy('creado') },
+    { label: 'Listo', at: o.readyAt, icon: <Check />, by: lastBy('listo') },
+    ...(delivery ? [{ label: o.courierName ? `Salió con ${o.courierName.split(' ')[0]}` : 'Despachado', at: o.dispatchedAt, icon: <Bike />, by: lastBy('despachado') }] : []),
+    { label: 'Entregado', at: o.deliveredAt, icon: delivery ? <Truck /> : <Check />, by: lastBy('entregado') },
+    { label: o.paid ? `Cobrado · ${METHOD_LABEL[o.paymentMethod!] ?? ''}` : 'Sin cobrar', at: o.paidAt, icon: <Wallet />, by: o.paidByName || lastBy('cobrado') },
   ];
   const cancelled = o.status === 'cancelado';
 
@@ -159,7 +204,9 @@ function DetailBody({ initial, onClose, onPay, onEdit, onDispatch }: Omit<Props,
                 <span className="tl-dot">{s.icon}</span>
                 <span className="tl-label">{s.label}</span>
                 <span className="tl-time num">{s.at ? clock(s.at) : '—'}</span>
-                {i === 1 && o.readyAt && <small className="muted">{minutesText(o.readyAt - o.createdAt)} de preparación</small>}
+                {(s.by || (i === 1 && o.readyAt)) && (
+                  <small className="muted">{[s.at && s.by, i === 1 && o.readyAt ? `${minutesText(o.readyAt - o.createdAt)} de preparación` : ''].filter(Boolean).join(' · ')}</small>
+                )}
               </li>
             ))}
           </ol>
@@ -180,66 +227,89 @@ function DetailBody({ initial, onClose, onPay, onEdit, onDispatch }: Omit<Props,
             )}
           </p>
         )}
+
+        {!!events?.length && (
+          <details className="detail-log">
+            <summary>
+              <History /> Bitácora · {events.length} movimiento{events.length === 1 ? '' : 's'}
+            </summary>
+            <ol>
+              {events.map((e) => (
+                <li key={e.id}>
+                  <span className="dlog-time num">{clock(e.at)}</span>
+                  <span className="dlog-what">{EVENT_LABEL[e.kind] ?? e.kind}</span>
+                  <span className="dlog-who">{e.byName ? <b>{e.byName}</b> : <i>sistema</i>}{e.byRole && <small> · {ROLE_LABEL[e.byRole]}</small>}</span>
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
       </div>
 
       {!cancelled && (
         <footer className="detail-foot">
           <div className="detail-actions">
-            {o.status !== 'recibido' && (
+            {o.status !== 'recibido' && perms.kitchen && (
               <button className="btn sm outline" onClick={async () => apply(await changeStatus(o, 'recibido'))}>
                 <RotateCcw /> Volver a cocina
               </button>
             )}
-            {o.status === 'listo' && (
+            {o.status === 'listo' && perms.manage && (
               <button className="btn sm outline" onClick={() => callTurn(o)}>
                 <Megaphone /> Llamar
               </button>
             )}
-            {o.status === 'en_camino' && (
+            {o.status === 'en_camino' && perms.dispatch && (
               <button className="btn sm outline" onClick={() => onDispatch(o)}>
                 <Repeat /> Otro repartidor
               </button>
             )}
-            <button className="btn sm outline" onClick={() => onEdit(o)}>
-              <Pencil /> Editar
-            </button>
-            {o.paid && (
+            {perms.manage && (
+              <button className="btn sm outline" onClick={() => onEdit(o)}>
+                <Pencil /> Editar
+              </button>
+            )}
+            {o.paid && perms.charge && (
               <button className="btn sm outline" onClick={async () => apply(await unpayOrder(o))}>
                 <Undo2 /> Anular cobro
               </button>
             )}
-            <button
-              className="btn sm danger"
-              onClick={async () => {
-                const u = await cancelOrder(o);
-                if (u) apply(u);
-              }}
-            >
-              <Ban /> Cancelar
-            </button>
+            {perms.manage && (
+              <button
+                className="btn sm danger"
+                onClick={async () => {
+                  const u = await cancelOrder(o);
+                  if (u) apply(u);
+                }}
+              >
+                <Ban /> Cancelar
+              </button>
+            )}
           </div>
           <div className="detail-main-actions">
-            {!o.paid && (
+            {!o.paid && perms.charge && (
               <button className="btn primary" onClick={() => onPay(o)}>
                 <Wallet /> Cobrar {money(o.total)}
               </button>
             )}
-            {o.status === 'recibido' && (
+            {o.status === 'recibido' && perms.kitchen && (
               <button className="btn success" onClick={async () => apply(await changeStatus(o, 'listo'))}>
                 <Check /> Marcar listo
               </button>
             )}
             {o.status === 'listo' &&
-              (delivery ? (
-                <button className="btn sea" onClick={() => onDispatch(o)}>
-                  <Truck /> Despachar
-                </button>
-              ) : (
-                <button className="btn gold" onClick={async () => apply(await changeStatus(o, 'entregado'))}>
-                  <Check /> Entregar
-                </button>
-              ))}
-            {o.status === 'en_camino' && (
+              (delivery
+                ? perms.dispatch && (
+                    <button className="btn sea" onClick={() => onDispatch(o)}>
+                      <Truck /> Despachar
+                    </button>
+                  )
+                : perms.kitchen && (
+                    <button className="btn gold" onClick={async () => apply(await changeStatus(o, 'entregado'))}>
+                      <Check /> Entregar
+                    </button>
+                  ))}
+            {o.status === 'en_camino' && canCloseDelivery(o, perms) && (
               <button className="btn sea" onClick={async () => apply(await markDelivered(o))}>
                 <Check /> Marcar entregado
               </button>

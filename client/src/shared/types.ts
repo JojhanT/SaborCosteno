@@ -153,7 +153,20 @@ export interface Order {
 
 export type LiveEventKind = 'created' | 'updated' | 'status' | 'paid' | 'unpaid' | 'cancelled' | 'call' | 'dispatched';
 
-export type Role = 'admin' | 'cajero' | 'cocinero' | 'repartidor';
+export type Role = 'admin' | 'mesero' | 'cajero' | 'cocinero' | 'repartidor';
+
+export type OrderEventKind = 'creado' | 'editado' | 'listo' | 'devuelto_cocina' | 'despachado' | 'entregado' | 'cobrado' | 'cobro_anulado' | 'cancelado';
+
+/** Una línea de la bitácora: qué pasó, cuándo y quién lo hizo. */
+export interface OrderEvent {
+  id: number;
+  kind: OrderEventKind;
+  at: number;
+  detail: Record<string, unknown> | null;
+  byId: number | null;
+  byName: string;
+  byRole: Role | null;
+}
 
 export interface Actor {
   id: number;

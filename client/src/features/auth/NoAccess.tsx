@@ -1,15 +1,15 @@
 import { ArrowLeft, LogOut } from 'lucide-react';
 import { Logo } from '../../shared/components/ui';
-import { can, logout, ROLE_LABEL, useMe } from '../../shared/lib/session';
+import { logout, ROLE_LABEL, useMe } from '../../shared/lib/session';
 import { navigate } from '../../shared/lib/router';
-import { landingPath, type Screen } from '../../app/routes';
+import { hasAny, landingPath, type Screen } from '../../app/routes';
 import { AccessLayout } from './AccessLayout';
 
 export function NoAccess({ screen }: { screen: Screen }) {
   const me = useMe()!;
   const user = me.user!;
   // tiene el permiso pero la pantalla está apagada en Ajustes
-  const disabled = can(me, screen.permission);
+  const disabled = hasAny(me, screen.permission);
   return (
     <AccessLayout
       title={disabled ? `${screen.title}: apagada` : 'No tienes acceso aquí'}

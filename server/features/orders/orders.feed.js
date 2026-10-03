@@ -11,8 +11,11 @@ import { activeOrders, nextTurn } from './orders.service.js';
 function visibleOrders(user, orders) {
   switch (user?.role) {
     case 'admin':
-    case 'cajero':
+    case 'mesero':
       return orders;
+    // el cajero solo maneja plata: ve lo que falta por cobrar, en cualquier estado
+    case 'cajero':
+      return orders.filter((o) => !o.paid);
     case 'cocinero':
       return orders.filter((o) => o.status === 'recibido' || o.status === 'listo');
     case 'repartidor':
@@ -22,7 +25,8 @@ function visibleOrders(user, orders) {
   }
 }
 
-const groupOf = (user) => (user?.role === 'repartidor' ? `r:${user.id}` : user?.role === 'cocinero' ? 'k' : user?.role === 'admin' || user?.role === 'cajero' ? 'all' : 'none');
+const groupOf = (user) =>
+  user?.role === 'repartidor' ? `r:${user.id}` : user?.role === 'cocinero' ? 'k' : user?.role === 'cajero' ? 'c' : user?.role === 'admin' || user?.role === 'mesero' ? 'all' : 'none';
 
 /** Un repartidor solo se entera de lo que tiene que ver con sus domicilios. */
 function eventFor(user, event) {

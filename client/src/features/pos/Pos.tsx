@@ -29,14 +29,18 @@ export default function Pos() {
   const { bootstrap, orders } = useLive();
   const catalog = bootstrap!.catalog;
   const draft = useDraft();
-  const [tab, setTab] = useState<Tab>('nuevo');
   const [picking, setPicking] = useState<{ product: Product; line: CartLine | null } | null>(null);
   const [detail, setDetail] = useState<Order | null>(null);
   const [paying, setPaying] = useState<Order | null>(null);
   const [payBusy, setPayBusy] = useState(false);
   const [dispatching, setDispatching] = useState<Order | null>(null);
   const canReports = useCan('reports.view');
+  const canTake = useCan('orders.manage');
+  const canCharge = useCan('orders.charge');
+  const canDispatch = useCan('orders.dispatch');
   const myId = useMe()?.user?.id;
+  // el cajero no arma pedidos: entra directo a la lista de lo que falta por cobrar
+  const [tab, setTab] = useState<Tab>(canTake ? 'nuevo' : 'pedidos');
 
   /* ---- avisos: la cocina marcó listo, un repartidor entregó ---- */
   useLiveEvents((e, list) => {
@@ -50,7 +54,7 @@ export default function Pos() {
         text: `${place} · lo marcó ${who} en cocina`,
         art: 'campana',
         ms: 7000,
-        action: order ? (e.type === 'domicilio' ? { label: 'Despachar', onClick: () => setDispatching(order) } : { label: 'Ver', onClick: () => setDetail(order) }) : undefined,
+        action: order ? (e.type === 'domicilio' && canDispatch ? { label: 'Despachar', onClick: () => setDispatching(order) } : { label: 'Ver', onClick: () => setDetail(order) }) : undefined,
       });
     } else if (e.status === 'entregado' && e.prevStatus === 'en_camino' && e.by.role === 'repartidor') {
       chime('new', 0.7);
@@ -96,8 +100,8 @@ export default function Pos() {
   };
 
   const tabs: { key: Tab; label: string; icon: ReactNode; badge?: number }[] = [
-    { key: 'nuevo', label: draft.editingId ? `Editando #${draft.editingTurn}` : 'Nuevo pedido', icon: <PlusCircle /> },
-    { key: 'pedidos', label: 'Pedidos', icon: <ClipboardList />, badge: orders.length },
+    ...(canTake ? [{ key: 'nuevo' as Tab, label: draft.editingId ? `Editando #${draft.editingTurn}` : 'Nuevo pedido', icon: <PlusCircle /> }] : []),
+    { key: 'pedidos', label: canTake ? 'Pedidos' : 'Por cobrar', icon: <ClipboardList />, badge: orders.length },
     ...(canReports ? [{ key: 'historial' as Tab, label: 'Contabilidad', icon: <Calculator /> }] : []),
   ];
 
@@ -107,7 +111,7 @@ export default function Pos() {
         <button className="pos-brand" onClick={() => navigate('/')} title="Inicio">
           <Logo kind="sc" tone="cream" className="pos-logo" />
           <span className="pos-brand-text">
-            <b className="display">Caja</b>
+            <b className="display">{canCharge ? 'Caja' : 'Pedidos'}</b>
             <small>{bootstrap!.settings.businessName}</small>
           </span>
         </button>
@@ -146,7 +150,7 @@ export default function Pos() {
       </header>
 
       <main className="pos-main">
-        {tab === 'nuevo' && (
+        {tab === 'nuevo' && canTake && (
           <div className="pos-new">
             <Menu catalog={catalog} onPick={pick} />
             <Cart onEditLine={editLine} />

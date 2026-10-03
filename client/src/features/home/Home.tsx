@@ -22,7 +22,14 @@ const TILES: Record<string, { art: string; title: string; text: string; tone: st
 export function Home() {
   const { bootstrap, orders, nextTurn } = useLive();
   const me = useMe()!;
-  const screens = homeScreens(me, bootstrap?.settings).map((s, i) => ({ ...s, ...TILES[s.path], key: String(i + 1) }));
+  // la misma pantalla sirve para tomar pedidos y para cobrar: se anuncia según el rol
+  const cashier = me.permissions.includes('orders.charge');
+  const screens = homeScreens(me, bootstrap?.settings).map((s, i) => ({
+    ...s,
+    ...TILES[s.path],
+    ...(s.path === '/caja' && !cashier ? { title: 'Pedidos', text: 'Toma los pedidos, los manda a cocina y los entrega.' } : {}),
+    key: String(i + 1),
+  }));
   const lan = bootstrap?.lan ?? [];
   const inKitchen = orders.filter((o) => o.status === 'recibido').length;
   const ready = orders.filter((o) => o.status === 'listo').length;

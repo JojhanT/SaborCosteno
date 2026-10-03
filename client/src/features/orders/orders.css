@@ -538,3 +538,64 @@
 .detail-staff b {
   color: var(--ink-2);
 }
+
+/* bitácora: quién hizo cada cosa, incluido lo que se deshizo */
+.detail-log {
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--s1);
+}
+.detail-log summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+  user-select: none;
+}
+.detail-log summary:hover {
+  color: var(--ink-2);
+}
+.detail-log summary svg {
+  width: 15px;
+  height: 15px;
+}
+.detail-log ol {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 10px;
+  display: grid;
+  gap: 6px;
+}
+.detail-log li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12.5px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.dlog-time {
+  color: var(--faint);
+}
+.dlog-what {
+  color: var(--ink-2);
+}
+.dlog-who {
+  color: var(--muted);
+  text-align: right;
+}
+.dlog-who b {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.dlog-who i {
+  font-style: normal;
+  color: var(--faint);
+}
+.dlog-who small {
+  color: var(--faint);
+}

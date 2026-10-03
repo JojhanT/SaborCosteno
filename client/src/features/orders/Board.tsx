@@ -3,6 +3,7 @@ import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import { Bike, Check, ChevronRight, Megaphone, Pencil, Repeat, Search, Truck, Wallet, X } from 'lucide-react';
 import { Art } from '../../shared/components/Art';
 import { useLive, useNow } from '../../shared/lib/live';
+import { can, useMe } from '../../shared/lib/session';
 import { TYPE_ART, elapsed, minutesText, money, orderPlace } from '../../shared/lib/format';
 import { markDelivered } from '../delivery/api';
 import { changeStatus, callTurn } from './actions';
@@ -16,6 +17,19 @@ export interface BoardHandlers {
   onDispatch: (o: Order) => void;
 }
 
+/** Qué puede hacer quien está mirando el tablero. */
+export interface BoardPerms {
+  manage: boolean;
+  charge: boolean;
+  kitchen: boolean;
+  dispatch: boolean;
+  userId: number | null;
+  isAdmin: boolean;
+}
+
+/** Un domicilio en camino solo lo cierra el repartidor que lo lleva (o el admin). */
+export const canCloseDelivery = (o: Order, p: BoardPerms) => p.isAdmin || (o.courierId != null && o.courierId === p.userId);
+
 const FILTERS: { key: 'all' | OrderType; label: string; art?: string }[] = [
   { key: 'all', label: 'Todos' },
   { key: 'mesa', label: 'Mesas', art: 'mesa' },
@@ -28,6 +42,18 @@ const EMPTY: Record<string, string> = { recibido: 'Cocina al día', listo: 'Nada
 export function Board(props: BoardHandlers) {
   const { orders, bootstrap } = useLive();
   const settings = bootstrap!.settings;
+  const me = useMe();
+  const perms = useMemo<BoardPerms>(
+    () => ({
+      manage: can(me, 'orders.manage'),
+      charge: can(me, 'orders.charge'),
+      kitchen: can(me, 'orders.kitchen'),
+      dispatch: can(me, 'orders.dispatch'),
+      userId: me?.user?.id ?? null,
+      isAdmin: me?.user?.role === 'admin',
+    }),
+    [me],
+  );
   // manejadores estables: así las tarjetas memorizadas no se redibujan sin motivo
   const ref = useRef(props);
   ref.current = props;
@@ -92,7 +118,7 @@ export function Board(props: BoardHandlers) {
               <div className="bcol-list">
                 <AnimatePresence mode="popLayout">
                   {col.orders.map((o) => (
-                    <BoardCard key={o.id} order={o} warn={settings.kitchenWarnMinutes} late={settings.kitchenLateMinutes} {...h} />
+                    <BoardCard key={o.id} order={o} warn={settings.kitchenWarnMinutes} late={settings.kitchenLateMinutes} perms={perms} {...h} />
                   ))}
                 </AnimatePresence>
                 {col.orders.length === 0 && (
@@ -128,7 +154,7 @@ function BoardTime({ order: o, warn, late }: { order: Order; warn: number; late:
   return <span className={`bcard-time num ${heatOf(o, now, warn, late)}`}>{text}</span>;
 }
 
-const BoardCard = memo(function BoardCard({ order: o, warn, late, onPay, onEdit, onDetail, onDispatch }: BoardHandlers & { order: Order; warn: number; late: number }) {
+const BoardCard = memo(function BoardCard({ order: o, warn, late, perms, onPay, onEdit, onDetail, onDispatch }: BoardHandlers & { order: Order; warn: number; late: number; perms: BoardPerms }) {
   const [busy, setBusy] = useState(false);
   const now = useNow(10000);
   const heat = heatOf(o, now, warn, late);
@@ -190,56 +216,69 @@ const BoardCard = memo(function BoardCard({ order: o, warn, late, onPay, onEdit,
         <div className="bcard-actions">
           {o.status === 'recibido' && (
             <>
-              <button className="btn sm icon ghost" title="Editar pedido" onClick={() => onEdit(o)}>
-                <Pencil />
-              </button>
-              {!o.paid && (
+              {perms.manage && (
+                <button className="btn sm icon ghost" title="Editar pedido" onClick={() => onEdit(o)}>
+                  <Pencil />
+                </button>
+              )}
+              {!o.paid && perms.charge && (
                 <button className="btn sm icon ghost" title="Cobrar" onClick={() => onPay(o)}>
                   <Wallet />
                 </button>
               )}
-              <button className="btn sm success" disabled={busy} onClick={() => run(() => changeStatus(o, 'listo'))}>
-                <Check /> Listo
-              </button>
+              {perms.kitchen && (
+                <button className="btn sm success" disabled={busy} onClick={() => run(() => changeStatus(o, 'listo'))}>
+                  <Check /> Listo
+                </button>
+              )}
             </>
           )}
           {o.status === 'listo' && (
             <>
-              <button className="btn sm icon ghost" title="Volver a llamar el turno" onClick={() => callTurn(o)}>
-                <Megaphone />
-              </button>
-              {!o.paid && (
+              {perms.manage && (
+                <button className="btn sm icon ghost" title="Volver a llamar el turno" onClick={() => callTurn(o)}>
+                  <Megaphone />
+                </button>
+              )}
+              {!o.paid && perms.charge && (
                 <button className="btn sm icon ghost" title="Cobrar" onClick={() => onPay(o)}>
                   <Wallet />
                 </button>
               )}
-              {o.type === 'domicilio' ? (
-                <button className="btn sm sea" disabled={busy} onClick={() => onDispatch(o)}>
-                  <Truck /> Despachar
-                </button>
-              ) : (
-                <button className="btn sm gold" disabled={busy} onClick={() => run(() => changeStatus(o, 'entregado'))}>
-                  <Check /> Entregar
-                </button>
-              )}
+              {o.type === 'domicilio'
+                ? perms.dispatch && (
+                    <button className="btn sm sea" disabled={busy} onClick={() => onDispatch(o)}>
+                      <Truck /> Despachar
+                    </button>
+                  )
+                : perms.kitchen && (
+                    <button className="btn sm gold" disabled={busy} onClick={() => run(() => changeStatus(o, 'entregado'))}>
+                      <Check /> Entregar
+                    </button>
+                  )}
             </>
           )}
           {o.status === 'en_camino' && (
             <>
-              <button className="btn sm icon ghost" title="Pasar a otro repartidor" onClick={() => onDispatch(o)}>
-                <Repeat />
-              </button>
-              {!o.paid && (
+              {perms.dispatch && (
+                <button className="btn sm icon ghost" title="Pasar a otro repartidor" onClick={() => onDispatch(o)}>
+                  <Repeat />
+                </button>
+              )}
+              {!o.paid && perms.charge && (
                 <button className="btn sm icon ghost" title="Cobrar" onClick={() => onPay(o)}>
                   <Wallet />
                 </button>
               )}
-              <button className="btn sm sea" disabled={busy} onClick={() => run(() => markDelivered(o))} title="Marcar entregado a nombre del repartidor">
-                <Check /> Entregado
-              </button>
+              {/* lo cierra quien lo lleva: así el registro dice de verdad quién entregó */}
+              {canCloseDelivery(o, perms) && (
+                <button className="btn sm sea" disabled={busy} onClick={() => run(() => markDelivered(o))} title="Confirmar que llegó">
+                  <Check /> Entregado
+                </button>
+              )}
             </>
           )}
-          {o.status === 'entregado' && (
+          {o.status === 'entregado' && perms.charge && (
             <button className="btn sm primary" onClick={() => onPay(o)}>
               <Wallet /> Cobrar
             </button>

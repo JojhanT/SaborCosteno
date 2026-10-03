@@ -8,6 +8,7 @@ import { money, plain } from '../../shared/lib/format';
 import { indexCatalog, linePrice } from '../../shared/lib/pricing';
 import { api } from '../../shared/lib/api';
 import { useLive } from '../../shared/lib/live';
+import { useCan } from '../../shared/lib/session';
 import { draftActions, draftPayload, useDraft } from './draft';
 import { PaymentModal } from './PaymentModal';
 import type { CartLine, Order, OrderType, PaymentMethod } from '../../shared/types';
@@ -24,6 +25,7 @@ export const Cart = memo(function Cart({ onEditLine }: { onEditLine: (line: Cart
   const catalog = bootstrap!.catalog;
   const idx = useMemo(() => indexCatalog(catalog), [catalog]);
   const draft = useDraft();
+  const canCharge = useCan('orders.charge');
   const [paying, setPaying] = useState(false);
   const [busy, setBusy] = useState(false);
   const [tablesOpen, setTablesOpen] = useState(true);
@@ -330,7 +332,7 @@ export const Cart = memo(function Cart({ onEditLine }: { onEditLine: (line: Cart
             {busy ? <span className="spinner" /> : <ChefHat />}
             Guardar cambios
           </button>
-        ) : (
+        ) : canCharge ? (
           <div className="cart-actions">
             <button className="btn outline lg" disabled={busy} onClick={() => send()} title="El cliente paga después">
               <ChefHat />
@@ -347,6 +349,15 @@ export const Cart = memo(function Cart({ onEditLine }: { onEditLine: (line: Cart
               </span>
             </button>
           </div>
+        ) : (
+          // quien toma pedidos no cobra: el cliente paga en la caja
+          <button className="btn primary lg block" disabled={busy} onClick={() => send()}>
+            {busy ? <span className="spinner" /> : <ChefHat />}
+            <span>
+              Enviar a cocina
+              <small className="num">{money(total)} · se cobra en la caja</small>
+            </span>
+          </button>
         )}
       </footer>
 

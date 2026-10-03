@@ -184,6 +184,30 @@ const MIGRATIONS = [
   CREATE INDEX order_items_order ON order_items (order_id);
   CREATE INDEX order_items_product ON order_items (product_id);
   `,
+  // 2 · rol "mesero" (toma pedidos, no cobra) y bitácora de quién hizo cada cosa.
+  // El DDL de MySQL no es transaccional: si esto falla a mitad se vuelve a correr
+  // entero al reiniciar, así que cada paso tiene que aguantar repetirse.
+  `
+  SET @chk := (SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+                WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND CONSTRAINT_TYPE = 'CHECK'
+                LIMIT 1);
+  SET @sql := IF(@chk IS NULL, 'SELECT 1', CONCAT('ALTER TABLE users DROP CHECK \`', @chk, '\`'));
+  PREPARE st FROM @sql; EXECUTE st; DEALLOCATE PREPARE st;
+  ALTER TABLE users ADD CONSTRAINT users_role_chk
+    CHECK (role IN ('admin', 'mesero', 'cajero', 'cocinero', 'repartidor'));
+
+  CREATE TABLE IF NOT EXISTS order_events (
+    id       INT PRIMARY KEY AUTO_INCREMENT,
+    order_id INT NOT NULL,
+    kind     VARCHAR(24) NOT NULL,
+    user_id  INT,
+    at       BIGINT NOT NULL,
+    detail   TEXT,
+    KEY order_events_order (order_id, id),
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  ) ENGINE=InnoDB;
+  `,
 ];
 
 /** Espera a que MySQL acepte conexiones: al arrancar junto al contenedor, el healthcheck
