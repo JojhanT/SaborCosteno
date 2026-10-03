@@ -168,7 +168,9 @@ export async function daySummary(day) {
       day,
     ),
     q.all(
-      `SELECT oi.name, oi.icon, SUM(oi.qty) AS qty, SUM(oi.line_total) AS total
+      // el ícono es solo para dibujar y es el mismo en todas las líneas del producto:
+      // va con ANY_VALUE porque MySQL no deja sacar columnas sueltas de un GROUP BY
+      `SELECT oi.name, ANY_VALUE(oi.icon) AS icon, SUM(oi.qty) AS qty, SUM(oi.line_total) AS total
          FROM order_items oi JOIN orders o ON o.id = oi.order_id
         WHERE o.business_day = ? AND o.status != 'cancelado'
         GROUP BY oi.product_id, oi.name ORDER BY qty DESC, total DESC LIMIT 5`,

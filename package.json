@@ -12,6 +12,9 @@
     "build": "vite build --config client/vite.config.ts",
     "start": "node server/index.js",
     "typecheck": "tsc -p client --noEmit",
+    "test": "npm run test:unit",
+    "test:unit": "node --test \"server/**/!(*.integration).test.js\"",
+    "test:integration": "node --test server/flujo.integration.test.js",
     "reset-claves": "node server/scripts/reset-claves.js",
     "respaldo": "node server/scripts/respaldo.js"
   },

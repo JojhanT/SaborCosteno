@@ -1,0 +1,69 @@
+name: Probar y desplegar
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pruebas:
+    name: Pruebas
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: pruebas
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -ppruebas"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Revisar los tipos del cliente
+        run: npm run typecheck
+
+      - name: Compilar el cliente
+        run: npm run build
+
+      - name: Pruebas de permisos
+        run: npm run test:unit
+
+      - name: Pruebas del flujo completo contra MySQL
+        run: npm run test:integration
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USER: root
+          DB_PASSWORD: pruebas
+          TEST_DB_NAME: sabor_test
+
+  desplegar:
+    name: Desplegar al servidor
+    needs: pruebas
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Entrar por SSH y actualizar
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          # la llave está limitada a ejecutar deploy.sh, así que el comando da igual
+          script: /opt/sabor/deploy.sh

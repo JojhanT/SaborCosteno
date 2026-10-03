@@ -22,6 +22,10 @@ export const pool = mysql.createPool({
   ...DB_CONFIG,
   waitForConnections: true,
   connectionLimit: 10,
+  // los SUM() de MySQL son DECIMAL y mysql2 los entrega como texto para no perder
+  // decimales. Aquí todo son pesos enteros, así que los queremos como números:
+  // si no, los totales del cuadre se concatenan en vez de sumarse.
+  decimalNumbers: true,
 });
 
 /**
