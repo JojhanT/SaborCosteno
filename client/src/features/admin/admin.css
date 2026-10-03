@@ -867,14 +867,20 @@
 }
 
 /* ---------- modal del QR ---------- */
+.qr-modal {
+  width: min(420px, 100%);
+  padding: 18px;
+}
 .qr-hoja {
   display: grid;
   justify-items: center;
   gap: 14px;
-  padding: 26px 22px;
+  /* arriba holgado: ahí cae el botón de cerrar del modal */
+  padding: 30px 22px 24px;
   border-radius: var(--r-l);
   background: var(--cream);
   color: var(--brown);
+  max-width: 100%;
 }
 .qr-hoja h2 {
   margin: 0;
@@ -882,9 +888,11 @@
   text-align: center;
   color: var(--brown);
 }
+/* lo limita el modal (560 px), no la pantalla: con vw se desbordaba y se recortaba */
 .qr-grande {
   display: block;
-  width: min(380px, 70vw);
+  width: 100%;
+  max-width: 320px;
   height: auto;
   border-radius: 10px;
 }
@@ -900,8 +908,12 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  margin-top: 16px;
+  justify-content: center;
+  margin-top: 14px;
+}
+.qr-modal-acciones .btn {
+  flex: 1;
+  min-width: 118px;
 }
 
 /* al imprimir solo sale la hoja del QR, sin la app detrás */

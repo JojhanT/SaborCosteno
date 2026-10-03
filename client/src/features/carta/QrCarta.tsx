@@ -34,15 +34,21 @@ async function pintar(canvas: HTMLCanvasElement, url: string, lado: number) {
   await logo.decode().catch(() => undefined);
   if (!logo.naturalWidth) return;
 
-  const tam = canvas.width * LOGO;
-  const x = (canvas.width - tam) / 2;
-  const margen = tam * 0.12;
+  // respetando su proporción: el logo no es cuadrado y estirarlo se nota
+  const caja = canvas.width * LOGO;
+  const escala = Math.min(caja / logo.naturalWidth, caja / logo.naturalHeight);
+  const ancho = logo.naturalWidth * escala;
+  const alto = logo.naturalHeight * escala;
+  const x = (canvas.width - ancho) / 2;
+  const y = (canvas.height - alto) / 2;
+
   // recuadro del color de fondo para que el logo no se confunda con los módulos
+  const margen = caja * 0.12;
   ctx.fillStyle = FONDO;
   ctx.beginPath();
-  ctx.roundRect(x - margen, x - margen, tam + margen * 2, tam + margen * 2, tam * 0.18);
+  ctx.roundRect(x - margen, y - margen, ancho + margen * 2, alto + margen * 2, caja * 0.16);
   ctx.fill();
-  ctx.drawImage(logo, x, x, tam, tam);
+  ctx.drawImage(logo, x, y, ancho, alto);
 }
 
 export function QrCarta() {

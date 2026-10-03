@@ -92,6 +92,8 @@ export default function Carta() {
   const { negocio, categorias, productos, salsas, adiciones } = datos;
   const conProductos = categorias.map((c) => ({ categoria: c, items: productos.filter((p) => p.categoryId === c.id) })).filter((g) => g.items.length > 0);
   const wa = soloDigitos(negocio.whatsapp);
+  // cada categoría toma un color de la marca, como las secciones del menú impreso
+  const TONOS = ['orange', 'gold', 'sea', 'terra'];
 
   return (
     <div className="carta">
@@ -105,19 +107,20 @@ export default function Carta() {
         <p className="carta-vacia">Estamos preparando la carta. Vuelve pronto.</p>
       ) : (
         <main className="carta-cuerpo">
-          {conProductos.map(({ categoria, items }) => (
-            <section key={categoria.id} className="carta-cat">
-              <h2 className="display">
+          {conProductos.map(({ categoria, items }, i) => (
+            <section key={categoria.id} className={`carta-cat tono-${TONOS[i % TONOS.length]}`}>
+              <header className="carta-cat-top">
                 <span className="carta-cat-art">
                   <Art name={categoria.icon} />
                 </span>
-                {categoria.name}
-              </h2>
+                <h2 className="display">{categoria.name}</h2>
+              </header>
 
               <ul className="carta-items">
                 {items.map((p) => (
                   <li key={p.id} className={`carta-item ${p.featured ? 'destacado' : ''}`}>
                     <Visual className="carta-foto" image={p.image} imageFit={p.imageFit} icon={p.icon} alt={p.name} />
+
                     <div className="carta-texto">
                       <h3>
                         {p.name}
@@ -125,15 +128,16 @@ export default function Carta() {
                       </h3>
                       {p.description && <p className="carta-desc">{p.description}</p>}
                       {p.ingredients.length > 0 && <p className="carta-ingr">{p.ingredients.join(' · ')}</p>}
-                    </div>
-                    <div className="carta-precios">
+
                       {p.options.length > 0 ? (
-                        p.options.map((o) => (
-                          <span key={o.name} className="carta-precio-opt">
-                            <small>{o.name}</small>
-                            <b className="num">{money(o.price ?? p.price)}</b>
-                          </span>
-                        ))
+                        <div className="carta-tamanos">
+                          {p.options.map((o) => (
+                            <span key={o.name} className="carta-tamano">
+                              <small>{o.name}</small>
+                              <b className="num">{money(o.price ?? p.price)}</b>
+                            </span>
+                          ))}
+                        </div>
                       ) : (
                         <b className="num carta-precio">{money(p.price)}</b>
                       )}
