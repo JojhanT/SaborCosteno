@@ -827,27 +827,116 @@
   gap: 12px;
 }
 
-/* tarjeta del código QR de la carta */
-.qr-vista {
+/* ---------- tarjeta del código QR de la carta ---------- */
+.qr-texto {
+  margin: 0;
+  font-size: 13px;
+}
+/* el canvas se dibuja a su tamaño real; encogerlo por CSS deja los módulos con moiré */
+.qr-mini {
   display: grid;
-  place-items: center;
+  justify-items: center;
+  gap: 8px;
   padding: 14px;
+  border: 1px solid var(--line-2);
   border-radius: var(--r);
   background: var(--cream);
-}
-.qr-canvas {
-  width: 100%;
-  max-width: 260px;
-  height: auto;
-  image-rendering: pixelated;
-  display: block;
-}
-.qr-url {
-  justify-content: center;
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 12px;
-  word-break: break-all;
   cursor: pointer;
+  transition: box-shadow 0.15s var(--ease-out);
+}
+.qr-mini:hover {
+  box-shadow: var(--glow);
+}
+.qr-mini canvas {
+  display: block;
+  border-radius: 6px;
+}
+.qr-mini span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--brown);
+}
+.qr-acciones {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.qr-acciones .btn {
+  flex: 1;
+  min-width: 150px;
+}
+
+/* ---------- modal del QR ---------- */
+.qr-hoja {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 26px 22px;
+  border-radius: var(--r-l);
+  background: var(--cream);
+  color: var(--brown);
+}
+.qr-hoja h2 {
+  margin: 0;
+  font-size: 24px;
+  text-align: center;
+  color: var(--brown);
+}
+.qr-grande {
+  display: block;
+  width: min(380px, 70vw);
+  height: auto;
+  border-radius: 10px;
+}
+.qr-pie {
+  margin: 0;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 13px;
+  color: var(--orange-lo);
+  word-break: break-all;
+  text-align: center;
+}
+.qr-modal-acciones {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* al imprimir solo sale la hoja del QR, sin la app detrás */
+@media print {
+  body > #root {
+    display: none;
+  }
+  .modal-backdrop {
+    position: static;
+    background: none;
+    padding: 0;
+  }
+  .qr-modal {
+    box-shadow: none;
+    background: none;
+    max-width: none;
+  }
+  .qr-modal-acciones,
+  .modal-x {
+    display: none;
+  }
+  .qr-hoja {
+    background: #fff;
+    color: #000;
+  }
+  .qr-hoja h2 {
+    color: #000;
+  }
+  .qr-grande {
+    width: 15cm;
+  }
+  .qr-pie {
+    color: #555;
+    font-size: 16px;
+  }
 }
 .scard h3 {
   margin: 0;
