@@ -874,6 +874,9 @@
 .qr-hoja {
   display: grid;
   justify-items: center;
+  /* sin esto el grid estira el canvas a lo alto y el código sale deformado */
+  align-content: start;
+  align-items: center;
   gap: 14px;
   /* arriba holgado: ahí cae el botón de cerrar del modal */
   padding: 30px 22px 24px;
@@ -888,12 +891,14 @@
   text-align: center;
   color: var(--brown);
 }
-/* lo limita el modal (560 px), no la pantalla: con vw se desbordaba y se recortaba */
+/* lo limita el modal, no la pantalla: con vw se desbordaba y se recortaba.
+   aspect-ratio deja la proporción fija pase lo que pase con el contenedor */
 .qr-grande {
   display: block;
-  width: 100%;
-  max-width: 320px;
+  width: min(100%, 300px);
   height: auto;
+  aspect-ratio: 1;
+  align-self: center;
   border-radius: 10px;
 }
 .qr-pie {

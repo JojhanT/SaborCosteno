@@ -146,11 +146,41 @@
   font-size: 20px;
   color: var(--tono);
 }
+.carta-eleccion .carta-precio {
+  margin-top: 0;
+}
+/* el concepto que se elige: "Pan", "Tamaño", "Proteína"… */
+.carta-etiqueta {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--tono);
+}
+.carta-opciones {
+  display: grid;
+  gap: 5px;
+  margin-top: 9px;
+  justify-items: start;
+}
+/* opciones que no cambian el precio: una sola cifra y las elecciones en texto */
+.carta-eleccion {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 8px;
+}
+.carta-eleccion p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
 .carta-tamanos {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 9px;
 }
 .carta-tamano {
   display: grid;

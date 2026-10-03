@@ -58,6 +58,43 @@ interface Datos {
 const soloDigitos = (s: string) => s.replace(/\D/g, '');
 const sinArroba = (s: string) => s.trim().replace(/^@/, '');
 
+/**
+ * Las opciones de un producto pueden ser dos cosas distintas y se muestran distinto:
+ * tamaños que cambian el precio (cada uno con el suyo) o elecciones que no lo cambian,
+ * como el tipo de pan (van como lista, con el precio del producto una sola vez).
+ */
+function Opciones({ producto: p }: { producto: Producto }) {
+  if (p.options.length === 0) return <b className="num carta-precio">{money(p.price)}</b>;
+
+  const etiqueta = p.optionsLabel?.trim() || 'Opción';
+  const cambianPrecio = p.options.some((o) => o.price != null);
+
+  if (!cambianPrecio) {
+    return (
+      <div className="carta-eleccion">
+        <b className="num carta-precio">{money(p.price)}</b>
+        <p>
+          <span className="carta-etiqueta">{etiqueta}:</span> {p.options.map((o) => o.name).join(' · ')}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="carta-opciones">
+      <span className="carta-etiqueta">{etiqueta}</span>
+      <div className="carta-tamanos">
+        {p.options.map((o) => (
+          <span key={o.name} className="carta-tamano">
+            <small>{o.name}</small>
+            <b className="num">{money(o.price ?? p.price)}</b>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Carta() {
   const [datos, setDatos] = useState<Datos | null>(null);
   const [error, setError] = useState(false);
@@ -129,18 +166,7 @@ export default function Carta() {
                       {p.description && <p className="carta-desc">{p.description}</p>}
                       {p.ingredients.length > 0 && <p className="carta-ingr">{p.ingredients.join(' · ')}</p>}
 
-                      {p.options.length > 0 ? (
-                        <div className="carta-tamanos">
-                          {p.options.map((o) => (
-                            <span key={o.name} className="carta-tamano">
-                              <small>{o.name}</small>
-                              <b className="num">{money(o.price ?? p.price)}</b>
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <b className="num carta-precio">{money(p.price)}</b>
-                      )}
+                      <Opciones producto={p} />
                     </div>
                   </li>
                 ))}
