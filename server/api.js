@@ -11,6 +11,7 @@ import { usersRouter } from "./features/users/users.routes.js";
 import { settingsRouter } from "./features/settings/settings.routes.js";
 import {
   publicSettings,
+  businessCard,
   businessDay,
 } from "./features/settings/settings.service.js";
 import { catalogRouter } from "./features/catalog/catalog.routes.js";
@@ -29,6 +30,45 @@ api.get("/health", async (_req, res) => {
   await q.get("SELECT 1");
   res.json({ ok: true });
 });
+/*
+ * La carta que abre el cliente con el QR: la única pantalla sin sesión además del
+ * ingreso. Va aquí arriba, antes de `authenticate`, y manda solo el menú y los datos
+ * del negocio — nunca el costo de preparación ni lo que no esté disponible.
+ */
+api.get("/carta", async (_req, res) => {
+  const [negocio, catalogo] = await Promise.all([
+    businessCard(),
+    getCatalog({ withCost: false }),
+  ]);
+  const disponible = (x) => x.active;
+  res.json({
+    negocio,
+    categorias: catalogo.categories.filter(disponible).map((c) => ({
+      id: c.id,
+      name: c.name,
+      icon: c.icon,
+      image: c.image,
+      imageFit: c.imageFit,
+    })),
+    productos: catalogo.products.filter(disponible).map((p) => ({
+      id: p.id,
+      categoryId: p.categoryId,
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      optionsLabel: p.optionsLabel,
+      options: p.options,
+      ingredients: p.ingredients,
+      icon: p.icon,
+      image: p.image,
+      imageFit: p.imageFit,
+      featured: p.featured,
+    })),
+    salsas: catalogo.sauces.filter(disponible).map((s) => ({ id: s.id, name: s.name, color: s.color })),
+    adiciones: catalogo.extras.filter(disponible).map((e) => ({ id: e.id, name: e.name, price: e.price })),
+  });
+});
+
 // sin sesión solo se puede usar /auth (iniciar sesión, configuración inicial)
 api.use(authRouter);
 api.use(authenticate);

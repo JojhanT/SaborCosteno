@@ -3,6 +3,13 @@ import { q, tx } from '../../core/db.js';
 export const DEFAULT_SETTINGS = {
   businessName: 'Sabor Costeño',
   slogan: '¡ajá!',
+  /* Datos que salen en la carta pública (/carta), la que abre el cliente con el QR. */
+  address: '',
+  phone: '',
+  whatsapp: '',
+  instagram: '',
+  facebook: '',
+  hours: '',
   tables: 12,
   timezone: 'America/Bogota',
   /** Hora en que arranca la jornada: pedidos antes de esta hora cuentan para el día anterior. */
@@ -44,6 +51,15 @@ export async function getSettings() {
 }
 
 export const publicSettings = () => getSettings();
+
+/**
+ * Lo único del negocio que puede ver cualquiera, sin sesión: lo que va al pie de la carta.
+ * Se escoge campo por campo a propósito — así un ajuste interno nuevo no se escapa solo.
+ */
+export async function businessCard() {
+  const s = await getSettings();
+  return { businessName: s.businessName, slogan: s.slogan, address: s.address, phone: s.phone, whatsapp: s.whatsapp, instagram: s.instagram, facebook: s.facebook, hours: s.hours };
+}
 
 export async function updateSettings(patch) {
   const clean = {};

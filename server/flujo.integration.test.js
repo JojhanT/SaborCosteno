@@ -302,8 +302,63 @@ describe('7 · cada rol recibe solo lo suyo', () => {
 
   test('sin sesión no se obtiene nada', async () => {
     const anon = session();
-    for (const url of ['/api/orders', '/api/orders/active', '/api/users', '/api/catalog']) {
+    for (const url of ['/api/orders', '/api/orders/active', '/api/users', '/api/catalog', '/api/settings', '/api/bootstrap', '/api/couriers', '/api/delivery/mine']) {
       assert.equal((await anon.get(url)).status, 401, `${url} debería pedir sesión`);
     }
+  });
+});
+
+describe('8 · la carta pública del QR', () => {
+  const anon = session();
+
+  test('se abre sin sesión', async () => {
+    const r = await anon.get('/api/carta');
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.ok(Array.isArray(r.data.productos));
+    assert.ok(r.data.productos.length > 0, 'debería traer el producto de prueba');
+  });
+
+  test('trae el precio de venta: es el punto de la carta', async () => {
+    const { data } = await anon.get('/api/carta');
+    const salchipapa = data.productos.find((p) => p.name === 'Salchipapa');
+    assert.ok(salchipapa, 'falta el producto');
+    assert.equal(salchipapa.price, 20000);
+  });
+
+  test('NUNCA trae el costo de preparación', async () => {
+    const { data } = await anon.get('/api/carta');
+    for (const p of data.productos) {
+      assert.ok(!('cost' in p), `el producto ${p.name} expone el costo al público`);
+    }
+    // ni escondido en otro rincón de la respuesta
+    assert.ok(!JSON.stringify(data).includes('"cost"'), 'la respuesta menciona el costo en alguna parte');
+  });
+
+  test('no expone ajustes internos del negocio', async () => {
+    const { data } = await anon.get('/api/carta');
+    for (const interno of ['voiceNew', 'voiceReady', 'voiceKitchen', 'dayCutoffHour', 'tables', 'kitchenWarnMinutes']) {
+      assert.ok(!(interno in data.negocio), `la carta expone el ajuste interno ${interno}`);
+    }
+  });
+
+  test('no muestra lo que está marcado como no disponible', async () => {
+    const antes = (await anon.get('/api/carta')).data.productos.length;
+    const prod = (await admin.get('/api/catalog')).data.products.find((p) => p.name === 'Salchipapa');
+    await admin.put(`/api/products/${prod.id}`, { ...prod, categoryId: prod.categoryId, active: false });
+
+    const apagado = (await anon.get('/api/carta')).data.productos;
+    assert.equal(apagado.length, antes - 1, 'el producto apagado sigue en la carta');
+    assert.ok(!apagado.some((p) => p.name === 'Salchipapa'));
+
+    await admin.put(`/api/products/${prod.id}`, { ...prod, categoryId: prod.categoryId, active: true });
+    assert.equal((await anon.get('/api/carta')).data.productos.length, antes, 'al reactivarlo debería volver');
+  });
+
+  test('los datos del negocio salen tal como se guardaron', async () => {
+    await admin.put('/api/settings', { address: 'Calle 110 # 48 B - 15', whatsapp: '3000000000', hours: 'Todos los días' });
+    const { negocio } = (await anon.get('/api/carta')).data;
+    assert.equal(negocio.address, 'Calle 110 # 48 B - 15');
+    assert.equal(negocio.whatsapp, '3000000000');
+    assert.equal(negocio.hours, 'Todos los días');
   });
 });

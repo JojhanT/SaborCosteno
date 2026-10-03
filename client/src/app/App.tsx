@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { navigate, usePath } from '../shared/lib/router';
 import { startLive, stopLive, useLive } from '../shared/lib/live';
@@ -13,6 +13,9 @@ import { Setup } from '../features/auth/Setup';
 import { NoAccess } from '../features/auth/NoAccess';
 import { ForcePasswordChange } from '../features/auth/ChangePassword';
 import { canOpen, findScreen, landingPath, skipsHome } from './routes';
+
+/** La carta del QR: pública, sin sesión y fuera de SCREENS (no es pantalla del personal). */
+const Carta = lazy(() => import('../features/carta/Carta'));
 
 export function App() {
   const path = usePath();
@@ -33,7 +36,9 @@ export function App() {
   }, [screen, bootstrap]);
 
   let content;
-  if (!me) content = <Splash text="Conectando con el servidor…" />;
+  // antes de todo lo demás: el cliente que escanea el QR no tiene sesión ni debe esperarla
+  if (path === '/carta') content = <Carta />;
+  else if (!me) content = <Splash text="Conectando con el servidor…" />;
   // en recuperación, los demás equipos siguen entrando normalmente; el dueño va a /recuperar con el código
   else if (me.setupRequired && (me.canSetup || !me.recovery || path === '/recuperar')) content = <Setup me={me} />;
   else if (!me.user) content = <Login />;

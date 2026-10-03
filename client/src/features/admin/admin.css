@@ -826,6 +826,29 @@
   align-items: center;
   gap: 12px;
 }
+
+/* tarjeta del código QR de la carta */
+.qr-vista {
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  border-radius: var(--r);
+  background: var(--cream);
+}
+.qr-canvas {
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  image-rendering: pixelated;
+  display: block;
+}
+.qr-url {
+  justify-content: center;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  word-break: break-all;
+  cursor: pointer;
+}
 .scard h3 {
   margin: 0;
   font-size: 22px;

@@ -5,6 +5,7 @@ import { toast, toastError } from '../../shared/components/ui';
 import { api } from '../../shared/lib/api';
 import { refreshBootstrap, useLive } from '../../shared/lib/live';
 import { money, plain } from '../../shared/lib/format';
+import { QrCarta } from '../carta/QrCarta';
 import type { Settings } from '../../shared/types';
 
 type Form = Settings;
@@ -62,6 +63,10 @@ export function SettingsPanel() {
             <input className="input" value={f.businessName} onChange={(e) => set({ businessName: e.target.value })} />
           </label>
           <label className="field">
+            <span>Lema</span>
+            <input className="input" value={f.slogan} maxLength={60} placeholder="¡ajá!" onChange={(e) => set({ slogan: e.target.value })} />
+          </label>
+          <label className="field">
             <span>Número de mesas</span>
             <input className="input num" type="number" min={1} max={60} value={f.tables} onChange={(e) => set({ tables: Number(e.target.value) })} />
           </label>
@@ -77,6 +82,43 @@ export function SettingsPanel() {
             <small className="muted">Los pedidos de la madrugada cuentan para el día anterior y los turnos vuelven a empezar en 1 a esta hora.</small>
           </label>
         </section>
+
+        <section className="scard">
+          <header>
+            <span className="scard-art">
+              <Art name="llevar" />
+            </span>
+            <h3 className="display">Carta para clientes</h3>
+          </header>
+          <p className="muted" style={{ margin: '0 0 4px', fontSize: 13 }}>Esto es lo que ve quien escanea el código QR. Lo que dejes vacío, no aparece.</p>
+          <label className="field">
+            <span>Dirección</span>
+            <input className="input" value={f.address} maxLength={120} placeholder="Calle 110 # 48 B - 15, Barrio La Francia" onChange={(e) => set({ address: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>Horario de atención</span>
+            <input className="input" value={f.hours} maxLength={120} placeholder="Lunes a domingo, 5:00 p. m. a 11:00 p. m." onChange={(e) => set({ hours: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>Teléfono</span>
+            <input className="input" inputMode="tel" value={f.phone} maxLength={30} placeholder="300 000 0000" onChange={(e) => set({ phone: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>WhatsApp</span>
+            <input className="input" inputMode="tel" value={f.whatsapp} maxLength={30} placeholder="300 000 0000" onChange={(e) => set({ whatsapp: e.target.value })} />
+            <small className="muted">Se abre el chat directo. Si es el mismo del teléfono, escríbelo igual.</small>
+          </label>
+          <label className="field">
+            <span>Instagram</span>
+            <input className="input" value={f.instagram} maxLength={60} placeholder="saborcosteno" autoCapitalize="none" onChange={(e) => set({ instagram: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>Facebook</span>
+            <input className="input" value={f.facebook} maxLength={60} placeholder="saborcosteno" autoCapitalize="none" onChange={(e) => set({ facebook: e.target.value })} />
+          </label>
+        </section>
+
+        <QrCarta />
 
         <section className="scard">
           <header>

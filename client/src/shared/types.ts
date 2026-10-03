@@ -7,6 +7,13 @@ export type ImageFit = 'cover' | 'contain';
 export interface Settings {
   businessName: string;
   slogan: string;
+  /** Datos que salen al pie de la carta pública. */
+  address: string;
+  phone: string;
+  whatsapp: string;
+  instagram: string;
+  facebook: string;
+  hours: string;
   tables: number;
   timezone: string;
   dayCutoffHour: number;
